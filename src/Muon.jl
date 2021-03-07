@@ -27,7 +27,7 @@ Base.@kwdef mutable struct MuData
 
 end
 
-function read_h5mu(filename::AbstractString; backed=true)
+function readh5mu(filename::AbstractString; backed=true)
   if backed
     fid = HDF5.h5open(filename)
   else
@@ -41,7 +41,7 @@ Base.size(mdata::MuData) = (mdata.n_obs, mdata.n_var)
 
 Base.show(mdata::MuData) = print("""MuData object $(mdata.n_obs) \u2715 $(mdata.n_var)""")
 
-export read_h5mu, size
+export readh5mu, size
 export AnnData, MuData
 
 end # module
