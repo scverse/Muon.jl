@@ -6,17 +6,16 @@ struct AnnData
     X::Array{Float64,2}
 end
 
-Base.@kwdef mutable struct MuData
-  mod::Union{Dict{String, AnnData}, Missing} = missing
+mutable struct MuData
   file::HDF5.File
+  mod::Union{Dict{String, AnnData}, Nothing}
 
-  obsm::Union{Dict{String, Any}, Missing} = missing
-
-  n_obs::Int64 = 0
-  n_var::Int64 = 0
+  obsm::Union{Dict{String, Any}, Nothing}
+  n_obs::Int64
+  n_var::Int64
   
-  function MuData(Missing, file::HDF5.File, obsm, n_obs::Int64, n_var::Int64)
-    mdata = new(missing, file)
+  function MuData(;file::HDF5.File)
+    mdata = new(file)
 
     mdata.obsm = HDF5.read(file["obsm"])
     
