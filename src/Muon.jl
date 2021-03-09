@@ -16,25 +16,43 @@ function readtable(tablegroup::HDF5.Group)
   delete!(tabledict, "__categories")
   table = DataFrame(tabledict)
   
-  return table
+  table
 end
 
 mutable struct AnnData
-    X::Array{Float64,2}
-    obs::DataFrame
+  file::Union{HDF5.File,HDF5.Group}
+
+  X::Array{Float64,2}
+  obs::Union{DataFrame, Nothing}
+  obsm::Union{Dict{String, Any}, Nothing}
+  
+  var::Union{DataFrame, Nothing}
+  varm::Union{Dict{String, Any}, Nothing}
+
+  function AnnData(file)
+    adata = new(file)
+
+    # Observations
+    adata.obs = readtable(file["obs"])
+    adata.obsm = HDF5.read(file["obsm"])
+
+    # Variables
+    adata.var = readtable(file["var"])
+    adata.varm = HDF5.read(file["varm"])
+    
+    adata
+  end
 end
 
 mutable struct MuData
   file::HDF5.File
   mod::Union{Dict{String, AnnData}, Nothing}
 
-  obsm::Union{Dict{String, Any}, Nothing}
   obs::Union{DataFrame, Nothing}
+  obsm::Union{Dict{String, Any}, Nothing}
   
   var::Union{DataFrame, Nothing}
-
-  n_obs::Int64
-  n_var::Int64
+  varm::Union{Dict{String, Any}, Nothing}
   
   function MuData(;file::HDF5.File)
     mdata = new(file)
@@ -45,9 +63,16 @@ mutable struct MuData
 
     # Variables
     mdata.var = readtable(file["var"])
-    
-    mdata.n_obs = size(mdata.file["obs"]["_index"])[1]
-    mdata.n_var = size(mdata.file["var"]["_index"])[1]
+    mdata.varm = HDF5.read(file["varm"])
+
+    # Modalities
+    mdata.mod = Dict{String,AnnData}()
+    mods = HDF5.keys(mdata.file["mod"])
+    for modality in mods
+      adata = AnnData(mdata.file["mod"][modality])
+      mdata.mod[modality] = adata
+    end
+
     mdata
   end
 end
@@ -56,15 +81,26 @@ function readh5mu(filename::AbstractString; backed=true)
   if backed
     fid = HDF5.h5open(filename)
   else
-    fid = HDF5.h5open(filename, "r+")
+    fid = HDF5.h5open(filename, "r")
   end
   mdata = MuData(file = fid)
   return mdata 
 end
 
-Base.size(mdata::MuData) = (mdata.n_obs, mdata.n_var)
+Base.size(mdata::MuData) = (size(mdata.file["obs"]["_index"])[1], size(mdata.file["var"]["_index"])[1])
 
-Base.show(mdata::MuData) = print("""MuData object $(mdata.n_obs) \u2715 $(mdata.n_var)""")
+Base.getindex(mdata::MuData, modality::Symbol) = mdata.mod[String(modality)]
+Base.getindex(mdata::MuData, modality::AbstractString) = mdata.mod[modality]
+
+function Base.show(io::IO, mdata::MuData)
+  compact = get(io, :compact, false)
+
+  print(io, """MuData object $(size(mdata)[1]) \u2715 $(size(mdata)[2])""")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", mdata::MuData)
+    show(io, mdata)
+end
 
 export readh5mu, size
 export AnnData, MuData
