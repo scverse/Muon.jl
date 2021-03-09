@@ -29,7 +29,7 @@ mutable struct AnnData
   var::Union{DataFrame, Nothing}
   varm::Union{Dict{String, Any}, Nothing}
 
-  function AnnData(file)
+  function AnnData(;file)
     adata = new(file)
 
     # Observations
@@ -79,22 +79,41 @@ end
 
 function readh5mu(filename::AbstractString; backed=true)
   if backed
-    fid = HDF5.h5open(filename)
-  else
     fid = HDF5.h5open(filename, "r")
+  else
+    fid = HDF5.h5open(filename, "r+")
   end
   mdata = MuData(file = fid)
   return mdata 
 end
 
+function readh5ad(filename::AbstractString; backed=true)
+  if backed
+    fid = HDF5.h5open(filename, "r")
+  else
+    fid = HDF5.h5open(filename, "r+")
+  end
+  adata = AnnData(file = fid)
+  return adata 
+end
+
+Base.size(adata::AnnData) = (size(adata.file["obs"]["_index"])[1], size(adata.file["var"]["_index"])[1])
 Base.size(mdata::MuData) = (size(mdata.file["obs"]["_index"])[1], size(mdata.file["var"]["_index"])[1])
 
 Base.getindex(mdata::MuData, modality::Symbol) = mdata.mod[String(modality)]
 Base.getindex(mdata::MuData, modality::AbstractString) = mdata.mod[modality]
 
+function Base.show(io::IO, adata::AnnData)
+  compact = get(io, :compact, false)
+  print(io, """AnnData object $(size(adata)[1]) \u2715 $(size(adata)[2])""")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", adata::AnnData)
+    show(io, adata)
+end
+
 function Base.show(io::IO, mdata::MuData)
   compact = get(io, :compact, false)
-
   print(io, """MuData object $(size(mdata)[1]) \u2715 $(size(mdata)[2])""")
 end
 
@@ -102,7 +121,7 @@ function Base.show(io::IO, ::MIME"text/plain", mdata::MuData)
     show(io, mdata)
 end
 
-export readh5mu, size
+export readh5mu, readh5ad
 export AnnData, MuData
 
 end # module
