@@ -29,7 +29,7 @@ mutable struct AnnData
   var::Union{DataFrame, Nothing}
   varm::Union{Dict{String, Any}, Nothing}
 
-  function AnnData(;file)
+  function AnnData(;file::Union{HDF5.File,HDF5.Group})
     adata = new(file)
 
     # Observations
@@ -69,7 +69,7 @@ mutable struct MuData
     mdata.mod = Dict{String,AnnData}()
     mods = HDF5.keys(mdata.file["mod"])
     for modality in mods
-      adata = AnnData(mdata.file["mod"][modality])
+      adata = AnnData(file=mdata.file["mod"][modality])
       mdata.mod[modality] = adata
     end
 
