@@ -22,7 +22,9 @@ end
 mutable struct AnnData
   file::Union{HDF5.File,HDF5.Group}
 
-  X::Array{Float64,2}
+  X::Union{Array{Float64,2}, Array{Float32,2}, Array{Int,2}}
+  layers::Union{Dict{String, Any}, Nothing}
+
   obs::Union{DataFrame, Nothing}
   obsm::Union{Dict{String, Any}, Nothing}
   
@@ -39,6 +41,20 @@ mutable struct AnnData
     # Variables
     adata.var = readtable(file["var"])
     adata.varm = HDF5.read(file["varm"])
+
+    # X
+    adata.X = HDF5.read(file["X"])
+    # TODO: Make a SparseMatrix if sparse
+
+    # Layers
+    if "layers" in HDF5.keys(file)
+      adata.layers = Dict{String,Any}()
+      layers = HDF5.keys(file["layers"])
+      for layer in layers
+        # TODO: Make a SparseMatrix if sparse
+        adata.layers[layer] = HDF5.read(file["layers"][layer])
+      end
+    end
     
     adata
   end
