@@ -1,12 +1,13 @@
 module Muon
 
+import SparseArrays: SparseMatrixCSC
 import HDF5
 import DataFrames: DataFrame
 import CategoricalArrays: CategoricalArray
 
 function readtable(tablegroup::HDF5.Group)
   tabledict = HDF5.read(tablegroup)
-  
+
   if haskey(tabledict, "__categories")
     for (k, cats) in tabledict["__categories"]
       tabledict[k] = CategoricalArray(map(x -> cats[x+1], tabledict[k]))
@@ -15,19 +16,36 @@ function readtable(tablegroup::HDF5.Group)
 
   delete!(tabledict, "__categories")
   table = DataFrame(tabledict)
-  
+
   table
 end
+
+function read_matrix(f::HDF5.Dataset)
+  return HDF5.read(f)
+end
+
+function read_matrix(f::HDF5.Group)
+  enctype = HDF5.read_attribute(f, "encoding-type")
+  shape = HDF5.read_attribute(f, "shape")
+  if enctype == "csc_matrix"
+    return SparseMatrixCSC(shape[1], shape[2], HDF5.read(f, "indptr") .+ 1, HDF5.read(f, "indices") .+ 1, HDF5.read(f, "data"))
+  elseif enctype == "csr_matrix"
+    return copy(SparseMatrixCSC(shape[2], shape[1], HDF5.read(f, "indptr") .+ 1, HDF5.read(f, "indices") .+ 1, HDF5.read(f, "data"))')
+  else
+    throw("unknown matrix encoding $enctype")
+  end
+end
+
 
 mutable struct AnnData
   file::Union{HDF5.File,HDF5.Group}
 
-  X::Union{Array{Float64,2}, Array{Float32,2}, Array{Int,2}}
+  X::Union{AbstractArray{Float64,2}, AbstractArray{Float32,2}, AbstractArray{Int,2}}
   layers::Union{Dict{String, Any}, Nothing}
 
   obs::Union{DataFrame, Nothing}
   obsm::Union{Dict{String, Any}, Nothing}
-  
+
   var::Union{DataFrame, Nothing}
   varm::Union{Dict{String, Any}, Nothing}
 
@@ -40,11 +58,10 @@ mutable struct AnnData
 
     # Variables
     adata.var = readtable(file["var"])
-    adata.varm = HDF5.read(file["varm"])
+    adata.varm = "varm" ∈ keys(file) ? HDF5.read(file["varm"]) : nothing
 
     # X
-    adata.X = HDF5.read(file["X"])
-    # TODO: Make a SparseMatrix if sparse
+    adata.X = read_matrix(file["X"])
 
     # Layers
     if "layers" in HDF5.keys(file)
@@ -52,10 +69,10 @@ mutable struct AnnData
       layers = HDF5.keys(file["layers"])
       for layer in layers
         # TODO: Make a SparseMatrix if sparse
-        adata.layers[layer] = HDF5.read(file["layers"][layer])
+        adata.layers[layer] = read_matrix(file["layers"][layer])
       end
     end
-    
+
     adata
   end
 end
@@ -66,10 +83,10 @@ mutable struct MuData
 
   obs::Union{DataFrame, Nothing}
   obsm::Union{Dict{String, Any}, Nothing}
-  
+
   var::Union{DataFrame, Nothing}
   varm::Union{Dict{String, Any}, Nothing}
-  
+
   function MuData(;file::HDF5.File)
     mdata = new(file)
 
@@ -100,7 +117,7 @@ function readh5mu(filename::AbstractString; backed=true)
     fid = HDF5.h5open(filename, "r+")
   end
   mdata = MuData(file = fid)
-  return mdata 
+  return mdata
 end
 
 function readh5ad(filename::AbstractString; backed=true)
@@ -110,7 +127,7 @@ function readh5ad(filename::AbstractString; backed=true)
     fid = HDF5.h5open(filename, "r+")
   end
   adata = AnnData(file = fid)
-  return adata 
+  return adata
 end
 
 Base.size(adata::AnnData) = (size(adata.file["obs"]["_index"])[1], size(adata.file["var"]["_index"])[1])
