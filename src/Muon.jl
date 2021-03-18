@@ -1,54 +1,81 @@
 module Muon
 
 import SparseArrays: SparseMatrixCSC
-import HDF5
+using HDF5
 import DataFrames: DataFrame
 import CategoricalArrays: CategoricalArray
 
-function readtable(tablegroup::HDF5.Group)
-    tabledict = HDF5.read(tablegroup)
+function read_dataframe(tablegroup::HDF5.Group)
+    columns = read_attribute(tablegroup, "column-order")
 
-    if haskey(tabledict, "__categories")
-        for (k, cats) in tabledict["__categories"]
-            tabledict[k] = CategoricalArray(map(x -> cats[x + 1], tabledict[k]))
+    havecat = false
+    if haskey(tablegroup, "__categories")
+        havecat = true
+        catcols = tablegroup["__categories"]
+    end
+
+    df = DataFrame()
+
+    if haskey(attributes(tablegroup), "_index")
+        indexdsetname = read_attribute(tablegroup, "_index")
+        df[!, indexdsetname] = read(tablegroup[indexdsetname])
+    end
+
+    for col ∈ columns
+        column = read(tablegroup, col)
+        if havecat && haskey(catcols, col)
+            cats = read(catcols, col)
+            column = CategoricalArray(map(x -> cats[x + 1], column))
         end
+        df[!, col] = column
     end
 
-    delete!(tabledict, "__categories")
-    table = DataFrame(tabledict)
-
-    table
+    return df
 end
 
-function read_matrix(f::HDF5.Dataset)
-    return HDF5.read(f)
+function read_csc_matrix(f::HDF5.Group)
+    shape = read_attribute(f, "shape")
+    return SparseMatrixCSC(
+        shape[1],
+        shape[2],
+        read(f, "indptr") .+ 1,
+        read(f, "indices") .+ 1,
+        read(f, "data"),
+    )
 end
 
-function read_matrix(f::HDF5.Group)
-    enctype = HDF5.read_attribute(f, "encoding-type")
-    shape = HDF5.read_attribute(f, "shape")
-    if enctype == "csc_matrix"
-        return SparseMatrixCSC(
-            shape[1],
+function read_csr_matrix(f::HDF5.Group)
+    shape = read_attribute(f, "shape")
+    return copy(
+        SparseMatrixCSC(
             shape[2],
-            HDF5.read(f, "indptr") .+ 1,
-            HDF5.read(f, "indices") .+ 1,
-            HDF5.read(f, "data"),
-        )
-    elseif enctype == "csr_matrix"
-        return copy(
-            SparseMatrixCSC(
-                shape[2],
-                shape[1],
-                HDF5.read(f, "indptr") .+ 1,
-                HDF5.read(f, "indices") .+ 1,
-                HDF5.read(f, "data"),
-            )',
-        )
+            shape[1],
+            read(f, "indptr") .+ 1,
+            read(f, "indices") .+ 1,
+            read(f, "data"),
+        )',
+    )
+end
+
+muread(f) = read(f)
+
+function muread(f::HDF5.Group)
+    if haskey(attributes(f), "encoding-type")
+        enctype = read_attribute(f, "encoding-type")
+        if enctype == "dataframe"
+            return read_dataframe(f)
+        elseif enctype == "csc_matrix"
+            return read_csc_matrix(f)
+        elseif enctype == "csr_matrix"
+            return read_csr_matrix(f)
+        else
+            throw("unknown encoding $enctype")
+        end
     else
-        throw("unknown matrix encoding $enctype")
+        return read(f)
     end
 end
+
 
 mutable struct AnnData
     file::Union{HDF5.File, HDF5.Group}
@@ -62,19 +89,19 @@ mutable struct AnnData
     var::Union{DataFrame, Nothing}
     varm::Union{Dict{String, Any}, Nothing}
 
-    function AnnData(; file::Union{HDF5.File, HDF5.Group})
+    function AnnData(file::Union{HDF5.File, HDF5.Group})
         adata = new(file)
 
         # Observations
-        adata.obs = readtable(file["obs"])
-        adata.obsm = HDF5.read(file["obsm"])
+        adata.obs = muread(file["obs"])
+        adata.obsm = muread(file["obsm"])
 
         # Variables
-        adata.var = readtable(file["var"])
-        adata.varm = "varm" ∈ keys(file) ? HDF5.read(file["varm"]) : nothing
+        adata.var = muread(file["var"])
+        adata.varm = "varm" ∈ keys(file) ? muread(file["varm"]) : nothing
 
         # X
-        adata.X = read_matrix(file["X"])
+        adata.X = muread(file["X"])
 
         # Layers
         if "layers" in HDF5.keys(file)
@@ -82,7 +109,7 @@ mutable struct AnnData
             layers = HDF5.keys(file["layers"])
             for layer in layers
                 # TODO: Make a SparseMatrix if sparse
-                adata.layers[layer] = read_matrix(file["layers"][layer])
+                adata.layers[layer] = muread(file["layers"][layer])
             end
         end
 
@@ -100,22 +127,22 @@ mutable struct MuData
     var::Union{DataFrame, Nothing}
     varm::Union{Dict{String, Any}, Nothing}
 
-    function MuData(; file::HDF5.File)
+    function MuData(file::HDF5.File)
         mdata = new(file)
 
         # Observations
-        mdata.obs = readtable(file["obs"])
-        mdata.obsm = HDF5.read(file["obsm"])
+        mdata.obs = muread(file["obs"])
+        mdata.obsm = muread(file["obsm"])
 
         # Variables
-        mdata.var = readtable(file["var"])
-        mdata.varm = HDF5.read(file["varm"])
+        mdata.var = muread(file["var"])
+        mdata.varm = muread(file["varm"])
 
         # Modalities
         mdata.mod = Dict{String, AnnData}()
         mods = HDF5.keys(mdata.file["mod"])
         for modality in mods
-            adata = AnnData(file=mdata.file["mod"][modality])
+            adata = AnnData(mdata.file["mod"][modality])
             mdata.mod[modality] = adata
         end
 
@@ -125,21 +152,21 @@ end
 
 function readh5mu(filename::AbstractString; backed=true)
     if backed
-        fid = HDF5.h5open(filename, "r")
+        fid = h5open(filename, "r")
     else
-        fid = HDF5.h5open(filename, "r+")
+        fid = h5open(filename, "r+")
     end
-    mdata = MuData(file=fid)
+    mdata = MuData(fid)
     return mdata
 end
 
 function readh5ad(filename::AbstractString; backed=true)
     if backed
-        fid = HDF5.h5open(filename, "r")
+        fid = h5open(filename, "r")
     else
-        fid = HDF5.h5open(filename, "r+")
+        fid = h5open(filename, "r+")
     end
-    adata = AnnData(file=fid)
+    adata = AnnData(fid)
     return adata
 end
 
