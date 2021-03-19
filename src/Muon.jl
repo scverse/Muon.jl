@@ -14,14 +14,16 @@ function read_dataframe(tablegroup::HDF5.Group)
         catcols = tablegroup["__categories"]
     end
 
-    df = DataFrame()
-
     if haskey(attributes(tablegroup), "_index")
         indexdsetname = read_attribute(tablegroup, "_index")
-        df[!, indexdsetname] = read(tablegroup[indexdsetname])
+        rownames = read(tablegroup[indexdsetname])
+    else
+        rownames = nothing
     end
 
-    for col ∈ columns
+    df = DataFrame()
+
+    for col in columns
         column = read(tablegroup, col)
         if havecat && haskey(catcols, col)
             cats = read(catcols, col)
@@ -30,86 +32,70 @@ function read_dataframe(tablegroup::HDF5.Group)
         df[!, col] = column
     end
 
-    return df
+    return df, rownames
 end
 
-function read_csc_matrix(f::HDF5.Group)
-    shape = read_attribute(f, "shape")
-    return SparseMatrixCSC(
-        shape[1],
-        shape[2],
-        read(f, "indptr") .+ 1,
-        read(f, "indices") .+ 1,
-        read(f, "data"),
-    )
-end
+read_matrix(f::HDF5.Dataset) = read(f)
 
-function read_csr_matrix(f::HDF5.Group)
+function read_matrix(f::HDF5.Group)
+    enctype = read_attribute(f, "encoding-type")
     shape = read_attribute(f, "shape")
-    return copy(
+    if enctype == "csc_matrix"
+        return SparseMatrixCSC(
+            shape[1],
+            shape[2],
+            read(f, "indptr") .+ 1,
+            read(f, "indices") .+ 1,
+            read(f, "data"),
+        )
+    elseif enctype == "csr_matrix"
+        return
         SparseMatrixCSC(
             shape[2],
             shape[1],
             read(f, "indptr") .+ 1,
             read(f, "indices") .+ 1,
             read(f, "data"),
-        )',
-    )
-end
-
-muread(f) = read(f)
-
-function muread(f::HDF5.Group)
-    if haskey(attributes(f), "encoding-type")
-        enctype = read_attribute(f, "encoding-type")
-        if enctype == "dataframe"
-            return read_dataframe(f)
-        elseif enctype == "csc_matrix"
-            return read_csc_matrix(f)
-        elseif enctype == "csr_matrix"
-            return read_csr_matrix(f)
-        else
-            throw("unknown encoding $enctype")
-        end
+        )'
     else
-        return read(f)
+        throw("unknown encoding $enctype")
     end
 end
-
 
 mutable struct AnnData
     file::Union{HDF5.File, HDF5.Group}
 
-    X::Union{AbstractArray{Float64, 2}, AbstractArray{Float32, 2}, AbstractArray{Int, 2}}
+    X::AbstractArray{Union{Float64, Float32, Int}, 2}
     layers::Union{Dict{String, Any}, Nothing}
 
     obs::Union{DataFrame, Nothing}
+    obs_names::Union{Vector{String}, Nothing}
     obsm::Union{Dict{String, Any}, Nothing}
 
     var::Union{DataFrame, Nothing}
+    var_names::Union{Vector{String}, Nothing}
     varm::Union{Dict{String, Any}, Nothing}
 
     function AnnData(file::Union{HDF5.File, HDF5.Group})
         adata = new(file)
 
         # Observations
-        adata.obs = muread(file["obs"])
-        adata.obsm = muread(file["obsm"])
+        adata.obs, adata.obs_names = read_dataframe(file["obs"])
+        adata.obsm = read(file["obsm"])
 
         # Variables
-        adata.var = muread(file["var"])
-        adata.varm = "varm" ∈ keys(file) ? muread(file["varm"]) : nothing
+        adata.var, adata.var_names = read_dataframe(file["var"])
+        adata.varm = "varm" ∈ keys(file) ? read(file["varm"]) : nothing
 
         # X
-        adata.X = muread(file["X"])
+        adata.X = read_matrix(file["X"])
 
         # Layers
         if "layers" in HDF5.keys(file)
             adata.layers = Dict{String, Any}()
             layers = HDF5.keys(file["layers"])
             for layer in layers
-                # TODO: Make a SparseMatrix if sparse
-                adata.layers[layer] = muread(file["layers"][layer])
+                adata.layers[layer] = read_matrix(file["layers"][layer])
             end
         end
 
@@ -122,21 +108,23 @@ mutable struct MuData
     mod::Union{Dict{String, AnnData}, Nothing}
 
     obs::Union{DataFrame, Nothing}
+    obs_names::Union{Vector{String}, Nothing}
     obsm::Union{Dict{String, Any}, Nothing}
 
     var::Union{DataFrame, Nothing}
+    var_names::Union{Vector{String}, Nothing}
     varm::Union{Dict{String, Any}, Nothing}
 
     function MuData(file::HDF5.File)
         mdata = new(file)
 
         # Observations
-        mdata.obs = muread(file["obs"])
-        mdata.obsm = muread(file["obsm"])
+        mdata.obs, mdata.obs_names = read_dataframe(file["obs"])
+        mdata.obsm = read(file["obsm"])
 
         # Variables
-        mdata.var = muread(file["var"])
-        mdata.varm = muread(file["varm"])
+        mdata.var, mdata.var_names = read_dataframe(file["var"])
+        mdata.varm = read(file["varm"])
 
         # Modalities
         mdata.mod = Dict{String, AnnData}()
