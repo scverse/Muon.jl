@@ -20,3 +20,10 @@ df = DataFrame(LF1 = mdata.obsm["X_umap"][1,:],
 
 data(df) * mapping(:LF1, :LF2) * visual(Scatter) |> draw
 ```
+
+Individual modalities can be accessed directly by their name:
+
+```julia
+mdata["rna"]
+# => AnnData object 10110 ✕ 101001
+```
