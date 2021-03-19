@@ -5,21 +5,25 @@ mutable struct MuData
     obs::Union{DataFrame, Nothing}
     obs_names::Union{Vector{String}, Nothing}
     obsm::Union{Dict{String, Any}, Nothing}
+    obsp::Union{Dict{String, AbstractMatrix{<:Number}}, Nothing}
 
     var::Union{DataFrame, Nothing}
     var_names::Union{Vector{String}, Nothing}
     varm::Union{Dict{String, Any}, Nothing}
+    varp::Union{Dict{String, AbstractMatrix{<:Number}}, Nothing}
 
     function MuData(file::HDF5.File)
         mdata = new(file)
 
         # Observations
         mdata.obs, mdata.obs_names = read_dataframe(file["obs"])
-        mdata.obsm = read(file["obsm"])
+        mdata.obsm = "obsm" ∈ keys(file) ? read(file["obsm"]) : nothing
+        mdata.obsp = "obsp" ∈ keys(file) ? read_dict_of_matrices(file["obsp"]) : nothing
 
         # Variables
         mdata.var, mdata.var_names = read_dataframe(file["var"])
-        mdata.varm = read(file["varm"])
+        mdata.varm = "varm" ∈ keys(file) ? read(file["varm"]) : nothing
+        mdata.varp = "varp" ∈ keys(file) ? read_dict_of_matrices(file["varp"]) : nothing
 
         # Modalities
         mdata.mod = Dict{String, AnnData}()
@@ -59,8 +63,10 @@ function Base.write(parent::Union{HDF5.File, HDF5.Group}, mudata::MuData)
     end
     write(parent, "obs", mudata.obs_names, mudata.obs)
     write(parent, "obsm", mudata.obsm)
+    write(parent, "obsp", mudata.obsp)
     write(parent, "var", mudata.var_names, mudata.var)
     write(parent, "varm", mudata.varm)
+    write(parent, "varp", mudata.varp)
 end
 
 Base.size(mdata::MuData) =

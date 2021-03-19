@@ -42,8 +42,7 @@ function read_matrix(f::HDF5.Group)
             read(f, "data"),
         )
     elseif enctype == "csr_matrix"
-        return
-        SparseMatrixCSC(
+        return SparseMatrixCSC(
             shape[2],
             shape[1],
             read(f, "indptr") .+ 1,
@@ -55,10 +54,14 @@ function read_matrix(f::HDF5.Group)
     end
 end
 
+function read_dict_of_matrices(f::HDF5.Group)
+    return Dict(key => read_matrix(f[key]) for key in keys(f))
+end
+
 function Base.write(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
-    data::Dict{String, Any},
+    data::Dict{String, <:Any},
 )
     g = create_group(parent, name)
     for (key, val) in data
@@ -129,13 +132,17 @@ end
 function Base.write(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
-    data::SparseMatrixCSC,
+    data::SparseMatrixCSC{<:Number, <:Integer};
+    transposed = false
 )
     g = create_group(parent, name)
     attrs = attributes(g)
-    attrs["encoding-type"] = "csc_matrix"
+    attrs["encoding-type"] = transposed ? "csr_matrix" : "csc_matrix"
     attrs["encoding-version"] = "0.1.0"
-    attrs["shape"] = collect(size(data))
+
+    shape = collect(size(data))
+    transposed && reverse!(shape)
+    attrs["shape"] = shape
     write(g, "indptr", data.colptr .- 1, extensible=true)
     write(g, "indices", data.rowval .- 1, extensible=true)
     write(g, "data", data.nzval, extensible=true)
@@ -144,7 +151,7 @@ end
 Base.write(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
-    data::Adjoint{<:Number, SparseMatrixCSC},
-) = write(parent, name, data.parent)
+    data::Adjoint{T, SparseMatrixCSC{T, V}} where {T <: Number, V <: Integer},
+) = write(parent, name, data.parent, transposed=true)
 
 Base.write(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, ::Nothing) = nothing
