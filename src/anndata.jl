@@ -1,7 +1,7 @@
 mutable struct AnnData
     file::Union{HDF5.File, HDF5.Group}
 
-    X::AbstractArray{Union{Float64, Float32, Int}, 2}
+    X::AbstractArray{<:Number, 2}
     layers::Union{Dict{String, Any}, Nothing}
 
     obs::Union{DataFrame, Nothing}
@@ -47,6 +47,29 @@ function readh5ad(filename::AbstractString; backed=true)
     end
     adata = AnnData(fid)
     return adata
+end
+
+function writeh5ad(filename::AbstractString, adata::AnnData)
+    file = h5open(filename, "w")
+    try
+        write(file, adata)
+    finally
+        close(file)
+    end
+end
+
+function Base.write(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, adata::AnnData)
+    g = create_group(parent, name)
+    write(g, adata)
+end
+
+function Base.write(parent::Union{HDF5.File, HDF5.Group}, adata::AnnData)
+    write(parent, "X", adata.X)
+    write(parent, "layers", adata.layers)
+    write(parent, "obs", adata.obs_names, adata.obs)
+    write(parent, "obsm", adata.obsm)
+    write(parent, "var", adata.var_names, adata.var)
+    write(parent, "varm", adata.varm)
 end
 
 Base.size(adata::AnnData) =

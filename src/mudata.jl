@@ -43,6 +43,26 @@ function readh5mu(filename::AbstractString; backed=true)
     return mdata
 end
 
+function writeh5mu(filename::AbstractString, mudata::MuData)
+    file = h5open(filename, "w")
+    try
+        write(file, mudata)
+    finally
+        close(file)
+    end
+end
+
+function Base.write(parent::Union{HDF5.File, HDF5.Group}, mudata::MuData)
+    g = create_group(parent, "mod")
+    for (mod, adata) ∈ mudata.mod
+        write(g, mod, adata)
+    end
+    write(parent, "obs", mudata.obs_names, mudata.obs)
+    write(parent, "obsm", mudata.obsm)
+    write(parent, "var", mudata.var_names, mudata.var)
+    write(parent, "varm", mudata.varm)
+end
+
 Base.size(mdata::MuData) =
     (size(mdata.file["obs"]["_index"])[1], size(mdata.file["var"]["_index"])[1])
 
