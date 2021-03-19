@@ -55,14 +55,22 @@ function read_matrix(f::HDF5.Group)
     end
 end
 
-function Base.write(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, data::Dict{String, Any})
+function Base.write(
+    parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    data::Dict{String, Any},
+)
     g = create_group(parent, name)
-    for (key, val) ∈ data
+    for (key, val) in data
         write(g, key, val)
     end
 end
 
-function Base.write(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, data::CategoricalVector)
+function Base.write(
+    parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    data::CategoricalVector,
+)
     write(parent, name, data.refs)
     write(parent, "__categories/$name", levels(data))
     attributes(parent[name])["categories"] = HDF5.Reference(parent["__categories"], name)
@@ -75,7 +83,7 @@ function Base.write(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, 
     attrs["encoding-version"] = "0.1.0"
     attrs["column-order"] = names(data)
 
-    for (name, column) ∈ pairs(eachcol(data))
+    for (name, column) in pairs(eachcol(data))
         write(g, string(name), column)
     end
 end
@@ -100,7 +108,13 @@ function Base.write(
     attributes(g)["_index"] = idxname
 end
 
-function Base.write(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, data::AbstractArray{<:Number}; extensible::Bool=false, compress::UInt8=UInt8(9))
+function Base.write(
+    parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    data::AbstractArray{<:Number};
+    extensible::Bool=false,
+    compress::UInt8=UInt8(9),
+)
     chunksize = HDF5.heuristic_chunk(data)
     if extensible
         dims = (size(data), Tuple(-1 for _ in 1:ndims(data)))
@@ -112,7 +126,11 @@ function Base.write(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, 
     write_dataset(d, dtype, data)
 end
 
-function Base.write(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, data::SparseMatrixCSC)
+function Base.write(
+    parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    data::SparseMatrixCSC,
+)
     g = create_group(parent, name)
     attrs = attributes(g)
     attrs["encoding-type"] = "csc_matrix"

@@ -54,7 +54,7 @@ end
 
 function Base.write(parent::Union{HDF5.File, HDF5.Group}, mudata::MuData)
     g = create_group(parent, "mod")
-    for (mod, adata) ∈ mudata.mod
+    for (mod, adata) in mudata.mod
         write(g, mod, adata)
     end
     write(parent, "obs", mudata.obs_names, mudata.obs)
