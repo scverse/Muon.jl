@@ -1,7 +1,7 @@
 mutable struct AnnData
-    file::Union{HDF5.File, HDF5.Group}
+    file::Union{HDF5.File, HDF5.Group, Nothing}
 
-    X::AbstractMatrix{<:Number}
+    X::Union{AbstractMatrix{<:Number}, Nothing}
     layers::Union{Dict{String, AbstractMatrix{<:Number}}, Nothing}
 
     obs::Union{DataFrame, Nothing}
@@ -14,8 +14,8 @@ mutable struct AnnData
     varm::Union{Dict{String, Any}, Nothing}
     varp::Union{Dict{String, AbstractMatrix{<:Number}}, Nothing}
 
-    function AnnData(file::Union{HDF5.File, HDF5.Group})
-        adata = new(file)
+    function AnnData(file::Union{HDF5.File, HDF5.Group}, backed=true)
+        adata = new(backed ? file : nothing)
 
         # Observations
         adata.obs, adata.obs_names = read_dataframe(file["obs"])
@@ -27,9 +27,8 @@ mutable struct AnnData
         adata.varm = "varm" ∈ keys(file) ? read(file["varm"]) : nothing
         adata.varp = "varp" ∈ keys(file) ? read_dict_of_matrices(file["varp"]) : nothing
 
-
         # X
-        adata.X = read_matrix(file["X"])
+        adata.X = backed ? nothing : read_matrix(file["X"])
 
         # Layers
         adata.layers = "layers" ∈ keys(file) ? read_dict_of_matrices(file["layers"]) : nothing
@@ -39,12 +38,12 @@ mutable struct AnnData
 end
 
 function readh5ad(filename::AbstractString; backed=true)
-    if backed
+    if !backed
         fid = h5open(filename, "r")
     else
         fid = h5open(filename, "r+")
     end
-    adata = AnnData(fid)
+    adata = AnnData(fid, backed)
     return adata
 end
 
@@ -74,7 +73,7 @@ function Base.write(parent::Union{HDF5.File, HDF5.Group}, adata::AnnData)
 end
 
 Base.size(adata::AnnData) =
-    (size(adata.file["obs"]["_index"])[1], size(adata.file["var"]["_index"])[1])
+    (length(adata.obs_names), length(adata.var_names))
 
 function Base.show(io::IO, adata::AnnData)
     compact = get(io, :compact, false)
@@ -83,4 +82,15 @@ end
 
 function Base.show(io::IO, ::MIME"text/plain", adata::AnnData)
     show(io, adata)
+end
+
+isbacked(adata::AnnData) = adata.file !== nothing
+
+function Base.getproperty(adata::AnnData, s::Symbol)
+    if s === :X && isbacked(adata)
+        X = adata.file["X"]
+        return X isa HDF5.Dataset ? X : SparseDataset(X)
+    else
+        return getfield(adata, s)
+    end
 end

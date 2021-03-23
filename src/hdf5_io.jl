@@ -32,23 +32,20 @@ read_matrix(f::HDF5.Dataset) = read(f)
 
 function read_matrix(f::HDF5.Group)
     enctype = read_attribute(f, "encoding-type")
-    shape = read_attribute(f, "shape")
-    if enctype == "csc_matrix"
-        return SparseMatrixCSC(
-            shape[1],
-            shape[2],
-            read(f, "indptr") .+ 1,
-            read(f, "indices") .+ 1,
-            read(f, "data"),
-        )
-    elseif enctype == "csr_matrix"
-        return SparseMatrixCSC(
-            shape[2],
-            shape[1],
-            read(f, "indptr") .+ 1,
-            read(f, "indices") .+ 1,
-            read(f, "data"),
-        )'
+
+    if enctype == "csc_matrix" || enctype == "csr_matrix"
+        shape = read_attribute(f, "shape")
+        iscsr = enctype[1:3] == "csr"
+
+        indptr = read(f, "indptr")
+        indices = read(f, "indices")
+        data = read(f, "data")
+
+        if iscsr
+            reverse!(shape)
+        end
+        mat = SparseMatrixCSC(shape..., indptr .+ eltype(indptr)(1), indices .+ eltype(indices)(1), data)
+        return iscsr ? mat' : mat
     else
         throw("unknown encoding $enctype")
     end

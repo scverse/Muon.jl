@@ -1,5 +1,5 @@
 mutable struct MuData
-    file::HDF5.File
+    file::Union{HDF5.File, Nothing}
     mod::Union{Dict{String, AnnData}, Nothing}
 
     obs::Union{DataFrame, Nothing}
@@ -12,8 +12,8 @@ mutable struct MuData
     varm::Union{Dict{String, Any}, Nothing}
     varp::Union{Dict{String, AbstractMatrix{<:Number}}, Nothing}
 
-    function MuData(file::HDF5.File)
-        mdata = new(file)
+    function MuData(file::HDF5.File, backed=true)
+        mdata = new(backed ? file : nothing)
 
         # Observations
         mdata.obs, mdata.obs_names = read_dataframe(file["obs"])
@@ -27,13 +27,11 @@ mutable struct MuData
 
         # Modalities
         mdata.mod = Dict{String, AnnData}()
-        mods = HDF5.keys(mdata.file["mod"])
+        mods = HDF5.keys(file["mod"])
         for modality in mods
-            adata = AnnData(mdata.file["mod"][modality])
-            mdata.mod[modality] = adata
+            mdata.mod[modality] = AnnData(file["mod"][modality], backed)
         end
-
-        mdata
+        return mdata
     end
 end
 
@@ -43,7 +41,7 @@ function readh5mu(filename::AbstractString; backed=true)
     else
         fid = h5open(filename, "r+")
     end
-    mdata = MuData(fid)
+    mdata = MuData(fid, backed)
     return mdata
 end
 
@@ -70,7 +68,7 @@ function Base.write(parent::Union{HDF5.File, HDF5.Group}, mudata::MuData)
 end
 
 Base.size(mdata::MuData) =
-    (size(mdata.file["obs"]["_index"])[1], size(mdata.file["var"]["_index"])[1])
+    (length(mdata.obs_names), length(mdata.var_names))
 
 Base.getindex(mdata::MuData, modality::Symbol) = mdata.mod[String(modality)]
 Base.getindex(mdata::MuData, modality::AbstractString) = mdata.mod[modality]
@@ -83,3 +81,5 @@ end
 function Base.show(io::IO, ::MIME"text/plain", mdata::MuData)
     show(io, mdata)
 end
+
+isbacked(mdata::MuData) = mdata.file !== nothing
