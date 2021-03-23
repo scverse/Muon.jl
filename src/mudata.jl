@@ -41,7 +41,14 @@ function readh5mu(filename::AbstractString; backed=true)
     else
         fid = h5open(filename, "r+")
     end
-    mdata = MuData(fid, backed)
+    local mdata
+    try
+        mdata = MuData(fid, backed)
+    finally
+        if !backed
+            close(fid)
+        end
+    end
     return mdata
 end
 

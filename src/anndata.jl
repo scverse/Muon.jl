@@ -43,7 +43,14 @@ function readh5ad(filename::AbstractString; backed=true)
     else
         fid = h5open(filename, "r+")
     end
-    adata = AnnData(fid, backed)
+    local adata
+    try
+        adata = AnnData(fid, backed)
+    finally
+        if !backed
+            close(fid)
+        end
+    end
     return adata
 end
 
