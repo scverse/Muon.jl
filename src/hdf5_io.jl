@@ -41,10 +41,20 @@ function read_matrix(f::HDF5.Group)
         indices = read(f, "indices")
         data = read(f, "data")
 
+        indptr .+= eltype(indptr)(1)
+        indices .+= eltype(indptr)(1)
+
+        # the row indices in every column need to be sorted
+        @views for (colstart, colend) in zip(indptr[1:(end - 1)], indptr[2:end])
+            ordering = sortperm(indices[colstart:(colend - 1)])
+            permute!(indices[colstart:(colend - 1)], ordering)
+            permute!(data[colstart:(colend - 1)], ordering)
+        end
+
         if iscsr
             reverse!(shape)
         end
-        mat = SparseMatrixCSC(shape..., indptr .+ eltype(indptr)(1), indices .+ eltype(indices)(1), data)
+        mat = SparseMatrixCSC(shape..., indptr, indices, data)
         return iscsr ? mat' : mat
     else
         throw("unknown encoding $enctype")
