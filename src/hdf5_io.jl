@@ -46,9 +46,7 @@ function read_matrix(f::HDF5.Group)
 
         # the row indices in every column need to be sorted
         @views for (colstart, colend) in zip(indptr[1:(end - 1)], indptr[2:end])
-            ordering = sortperm(indices[colstart:(colend - 1)])
-            permute!(indices[colstart:(colend - 1)], ordering)
-            permute!(data[colstart:(colend - 1)], ordering)
+            sort!(indices[colstart:(colend - 1)], data[colstart:(colend - 1)])
         end
 
         if iscsr

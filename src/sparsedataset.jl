@@ -1,10 +1,13 @@
-struct SparseDataset
+# a normal HDF5 dataset is not a subtype of AbstractArray, but then again HDF5.jl does not perform
+# ahead-of-time bounds checking. checkbounds() and CartesianIndices are only defined for AbstractArrays
+# and I don't want to also reimplement those
+struct SparseDataset{T} <: AbstractArray{T, 2}
     group::HDF5.Group
     csr::Bool
 
     function SparseDataset(group::HDF5.Group)
         csr = read_attribute(group, "encoding-type")[1:3] == "csr"
-        return new(group, csr)
+        return new{eltype(group["data"])}(group, csr)
     end
 end
 
@@ -20,105 +23,153 @@ function Base.getproperty(dset::SparseDataset, s::Symbol)
     end
 end
 
-struct DatasetOffsetWrapper{T<:Integer, N} <: AbstractArray{T, N}
-    dset::HDF5.Dataset
-    function DatasetOffsetWrapper(dset::HDF5.Dataset)
-        return new{eltype(dset), ndims(dset)}(dset)
-    end
-end
-
-Base.size(A::DatasetOffsetWrapper) = size(A.dset)
-(Base.getindex(A::DatasetOffsetWrapper{T, N}, i::Int)::T) where {T, N} = getindex(A.dset, i) + T(1)
-(Base.getindex(A::DatasetOffsetWrapper{T, N}, I::UnitRange{<:Integer})::Array{T, 1}) where {T, N} = getindex(A.dset, I) .+ T(1)
-# apparently some console printing functions always use 2 indices, even for a 1d array
-function Base.getindex(A::DatasetOffsetWrapper{T, N}, I::Integer...)::T where {T, N}
-    @boundscheck if length(I) > N && any(I[(N+1):end] .> 1)
-        throw(BoundsError(A, I))
-    end
-    return getindex(A.dset, I[1:N]...) .+ T(1)
-end
-Base.setindex!(A::DatasetOffsetWrapper{T, N}, v::Integer, i::Int) where {T, N} = setindex!(A.dset, v .- T(1), i)
-Base.setindex!(A::DatasetOffsetWrapper{T, N}, v::Integer, I...) where {T, N} = setindex!(A.dset, v .- T(1), I...)
-Base.length(A::DatasetOffsetWrapper) = length(A.dset)
-Base.axes(A::DatasetOffsetWrapper) = axes(A.dset)
-Base.eachindex(A::DatasetOffsetWrapper) = eachindex(A.dset)
-function Base.isassigned(A::DatasetOffsetWrapper{T, N}, I::Integer...) where {T, N}
-    @boundscheck if length(I) > N && any(I[(N+1):end] .> 1)
-        return false
-    else
-        @boundscheck begin
-            if length(I) < N
-                throw(BoundsError(A, I))
-            end
-            sz = size(A)
-            for (i, d) in zip(I, sz)
-                if i > d
-                    return false
-                end
-            end
-        end
-        return true
-    end
-end
-
-
-
-struct BackedSparseMatrixCSC{Tv<:Number, Ti<:Integer} <: SparseArrays.AbstractSparseMatrixCSC{Tv, Ti}
-    m::Int
-    n::Int
-    colptr::DatasetOffsetWrapper{Ti, 1}
-    rowval::DatasetOffsetWrapper{Ti, 1}
-    nzval::HDF5.Dataset
-
-    function BackedSparseMatrixCSC(m::Int, n::Int, colptr::HDF5.Dataset, rowval::HDF5.Dataset, nzval::HDF5.Dataset)
-        cols = DatasetOffsetWrapper(colptr)
-        rows = DatasetOffsetWrapper(rowval)
-        @assert eltype(cols) ===  eltype(rows)
-        return new{eltype(nzval), eltype(cols)}(m, n, cols, rows, nzval)
-    end
-end
-Base.size(S::BackedSparseMatrixCSC) = (S.m, S.n)
-SparseArrays.getcolptr(S::BackedSparseMatrixCSC) = S.colptr
-SparseArrays.rowvals(S::BackedSparseMatrixCSC) = S.rowval
-SparseArrays.nonzeros(S::BackedSparseMatrixCSC) = S.nzval
+getcolptr(dset::SparseDataset) = dset.group["indptr"]
+rowvals(dset::SparseDataset) = dset.group["indices"]
+nonzeros(dset::SparseDataset) = dset.group["data"]
 
 Base.isassigned(dset::HDF5.Dataset, i) = i <= length(dset)
-Base.getindex(dset::HDF5.Dataset, I::UnitRange{<:Integer}) = isempty(I) ? Array{eltype(dset), 1}() : getindex(dset, I)
-
-function to_backed_mat(dset::SparseDataset)
-    m, n = size(dset)
-    if dset.csr
-        m, n = n, m
-    end
-    return BackedSparseMatrixCSC(m, n, dset.group["indptr"], dset.group["indices"], dset.group["data"])
-end
 
 Base.ndims(dset::SparseDataset) = length(attributes(dset.group)["shape"])
 Base.size(dset::SparseDataset) = Tuple(read_attribute(dset.group, "shape"))
 Base.size(dset::SparseDataset, d::Integer) = size(dset)[d]
 Base.length(dset::SparseDataset) = prod(size(dset))
 
+rawsize(dset::SparseDataset) = dset.csr ? reverse(size(dset)) : size(dset)
+
 Base.lastindex(dset::SparseDataset) = length(dset)
 Base.lastindex(dset::SparseDataset, d::Int) = size(dset, d)
 HDF5.datatype(dset::SparseDataset) = datatype(dset.group["data"])
 Base.read(dset::SparseDataset) = read_matrix(dset.group)
 
+function Base.getindex(dset::SparseDataset, I::Integer...)
+    throw(BoundsError(dset, I))
+end
+Base.getindex(dset::SparseDataset, i::Integer) = getindex(dset, CartesianIndices(dset)[i])
 Base.getindex(dset::SparseDataset, I::Tuple{Integer, Integer}) = getindex(dset, I[1], I[2])
-function Base.getindex(dset::SparseDataset, i0::Integer, i1::Integer)
-    mtx = to_backed_mat(dset)
-    return dset.csr ? mtx[i1, i0] : mtx[i0, i1]
+function Base.getindex(dset::SparseDataset, i::Integer, j::Integer)
+    @boundscheck checkbounds(dset, i, j)
+    if dset.csr
+        i, j = j, i
+    end
+    colptr = getcolptr(dset)
+    rowval = rowvals(dset)
+    c1, c2 = colptr[j] + 1, colptr[j + 1]
+    rowidx = findfirst(x -> x == i - 1, rowval[c1:c2])
+    return rowidx === nothing ? eltype(dset)(0) : nonzeros(dset)[c1 + rowidx - 1]
 end
 Base.getindex(dset::SparseDataset, ::Colon, ::Colon) = read(dset)
-function Base.getindex(dset::SparseDataset, i, j)
-    mtx = to_backed_mat(dset)
-    return dset.csr ? mtx[j, i]' : mtx[i, j]
+function Base.getindex(dset::SparseDataset, I::AbstractUnitRange, j::Integer)
+    @boundscheck checkbounds(dset, I, j)
+    return dset.csr ? _getindex(dset, j, I) : _getindex(dset, I, j)
+end
+function Base.getindex(dset::SparseDataset, i::Integer, J::AbstractUnitRange)
+    @boundscheck checkbounds(dset, i, J)
+    return dset.csr ? _getindex(dset, J, i) : _getindex(dset, i, J)
+end
+
+function Base.getindex(dset::SparseDataset, I::AbstractUnitRange, J::AbstractUnitRange)
+    @boundscheck checkbounds(dset, I, J)
+    sz = size(dset)
+    if first(I) == 1 && last(I) == sz[1] && first(J) == 1 && last(J) == sz[2]
+        return dset[:, :]
+    end
+    if dset.csr
+        I, J = J, I
+    end
+    colptr = getcolptr(dset)
+    rows = rowvals(dset)
+    data = nonzeros(dset)
+
+    newcols = Vector{eltype(colptr)}(undef, length(J) + 1)
+    newcols[1] = 1
+    newrows = Vector{Vector{eltype(rows)}}()
+    newdata = Vector{Vector{eltype(dset)}}()
+    for (nc, c) in enumerate(J)
+        c1, c2 = colptr[c] + 1, colptr[c + 1]
+        rowidx = findall(x -> x + 1 ∈ I, rows[c1:c2])
+        newcols[nc + 1] = newcols[nc] + length(rowidx)
+
+        if length(rowidx) > 0
+            currdata = data[c1:c2][rowidx]
+            sort!(rowidx, currdata)
+            rowidx .-= first(I) - 1
+            push!(newrows, rowidx)
+            push!(newdata, currdata)
+        end
+    end
+    finalrows, finaldata =
+        length(newrows) > 0 ? (reduce(vcat, newrows), reduce(vcat, newdata)) :
+        (Vector{eltype(newcols)}(), Vector{eltype(newdata)}())
+    mat = SparseMatrixCSC(length(I), length(J), newcols, finalrows, finaldata)
+    return dset.csr ? mat' : mat
+end
+
+function Base.getindex(dset::SparseDataset, i::Integer, ::Colon)
+    @boundscheck checkbounds(dset, i, :)
+    return dset.csr ? _getindex(dset, :, i) : _getindex(dset, i, :)
+end
+
+function Base.getindex(dset::SparseDataset, ::Colon, i::Integer)
+    @boundscheck checkbounds(dset, :, i)
+    return dset.csr ? _getindex(dset, i, :) : _getindex(dset, :, i)
+end
+
+Base.getindex(dset::SparseDataset, I::AbstractUnitRange, ::Colon) = dset[I, 1:size(dset, 2)]
+
+Base.getindex(dset::SparseDataset, ::Colon, J::AbstractUnitRange) = dset[1:size(dset, 1), J]
+
+function _getindex(dset, i::Integer, J::AbstractUnitRange)
+    colptr = getcolptr(dset)
+    rows = rowvals(dset)
+    c1, c2 = colptr[first(J)] + 1, colptr[last(J)]
+    rowidx = findall(x -> x == i - 1, rows[c1:c2])
+    data = nonzeros(dset)[c1:c2][rowidx]
+
+    sort!(rowidx, data)
+    return SparseVector(length(J), rowidx, data)
+end
+
+function _getindex(dset, I::AbstractUnitRange, j::Integer)
+    colptr = getcolptr(dset)
+    rows = rowvals(dset)
+    c1, c2 = colptr[j] + 1, colptr[j + 1]
+    rowidx = findall(x -> x + 1 ∈ I, rows[c1:c2])
+    data = nonzeros(dset)[c1:c2][rowidx]
+
+    sort!(rowidx, data)
+    return SparseVector(length(I), rowidx, data)
+end
+
+function _getindex(dset, i::Integer, ::Colon)
+    rows = rowvals(dset)
+    nz = nonzeros(dset)
+    rowidx = findall(x -> x + 1 == i, rows)
+    data = [nz[i] for i in rowidx]
+
+    sort!(rowidx, data)
+    return SparseVector(rawsize(dset)[2], rowidx, data)
+end
+
+function _getindex(dset, ::Colon, j::Integer)
+    colptr = getcolptr(dset)
+    rows = rowvals(dset)
+    c1, c2 = colptr[j] + 1, colptr[j + 1]
+    rowidx = rows[c1:c2]
+    data = nonzeros(dset)[c1:c2]
+
+    sort!(rowidx, data)
+    return SparseVector(rawsize(dset)[1], rowidx, data)
 end
 
 Base.eachindex(dset::SparseDataset) = CartesianIndices(size(dset))
 
 Base.axes(dset::SparseDataset) = map(Base.OneTo, size(dset))
 
-function Base.setindex!(dset::SparseDataset, X::Union{<:Number, Array{<:Number}}, I::HDF5.IndexType, J::HDF5.IndexType)
-    mtx = to_backed_mat(dset)
-    dset.csr ? setindex!(mtx, X, J, I) : setindex!(mtx, X, I, J)
+function Base.setindex!(
+    dset::SparseDataset,
+    X::Union{<:Number, Array{<:Number}},
+    I::HDF5.IndexType,
+    J::HDF5.IndexType,
+)
+    throw("not implemented")
 end
