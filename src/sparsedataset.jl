@@ -41,9 +41,6 @@ Base.lastindex(dset::SparseDataset, d::Int) = size(dset, d)
 HDF5.datatype(dset::SparseDataset) = datatype(dset.group["data"])
 Base.read(dset::SparseDataset) = read_matrix(dset.group)
 
-function Base.getindex(dset::SparseDataset, I::Integer...)
-    throw(BoundsError(dset, I))
-end
 Base.getindex(dset::SparseDataset, i::Integer) = getindex(dset, CartesianIndices(dset)[i])
 Base.getindex(dset::SparseDataset, I::Tuple{Integer, Integer}) = getindex(dset, I[1], I[2])
 function Base.getindex(dset::SparseDataset, i::Integer, j::Integer)
@@ -86,14 +83,15 @@ function Base.getindex(dset::SparseDataset, I::AbstractUnitRange, J::AbstractUni
     newdata = Vector{Vector{eltype(dset)}}()
     for (nc, c) in enumerate(J)
         c1, c2 = colptr[c] + 1, colptr[c + 1]
-        rowidx = findall(x -> x + 1 ∈ I, rows[c1:c2])
+        currrows = rows[c1:c2] .+ 1
+        rowidx = findall(x -> x ∈ I, currrows)
         newcols[nc + 1] = newcols[nc] + length(rowidx)
 
         if length(rowidx) > 0
             currdata = data[c1:c2][rowidx]
-            sort!(rowidx, currdata)
-            rowidx .-= first(I) - 1
-            push!(newrows, rowidx)
+            currrows = currrows[rowidx]
+            sort!(rowidx, currdata, currrows)
+            push!(newrows, currrows)
             push!(newdata, currdata)
         end
     end
@@ -161,15 +159,53 @@ function _getindex(dset, ::Colon, j::Integer)
     return SparseVector(rawsize(dset)[1], rowidx, data)
 end
 
+function Base.setindex!(dset::SparseDataset, x::Number, i::Integer, j::Integer)
+    @boundscheck checkbounds(dset, i, j)
+    if dset.csr
+        i, j = j, i
+    end
+    cols = getcolptr(dset)
+    rows = rowvals(dset)
+
+    c1, c2 = cols[j] + 1, cols[j + 1]
+    rowidx = findfirst(x -> x + 1 == i, rows[c1:c2])
+    if rowidx === nothing && x != 0
+        throw("changing the sparsity structure of a SparseDataset is not supported")
+    elseif x != 0
+        nonzeros(dset)[c1 + rowidx - 1] = x
+    end
+end
+function Base.setindex!(dset::SparseDataset{<:Number}, x::AbstractArray{<:Number, 2}, I::AbstractUnitRange, J::AbstractUnitRange)
+    @boundscheck checkbounds(dset, I, J)
+    length(x) == length(I) * length(J) || throw(DimensionMismatch("tried to assign $(length(x)) elements to destination of size $(length(I) * length(J))"))
+    if dset.csr
+        I, J = J, I
+        x = x'
+    end
+    linxidx = LinearIndices(x)
+    cols = getcolptr(dset)
+    rows = rowvals(dset)
+
+    xidx = Int[]
+    dsetidx = Int[]
+    for (ic, c) in enumerate(J)
+        c1, c2 = cols[c] + 1, cols[c + 1]
+        crows = rows[c1:c2] .+ 1
+        rowidx = findall(x -> x ∈ I, crows)
+        xvals = x[I[I .∉ ((@view crows[rowidx]),)], ic]
+        if length(rowidx) != length(I) && any(xvals .!= 0)
+            throw("changing the sparsity structure of a SparseDataset is not supported")
+        end
+        append!(xidx, linxidx[crows[rowidx], ic])
+        append!(dsetidx, c1 - 1 .+ rowidx)
+    end
+    # HDF5 doesn't support assignment using Arrays as indices, so we have to loop
+    nz = nonzeros(dset)
+    for (di, dx) in zip(dsetidx, @view x[xidx])
+        nz[di] = dx
+    end
+end
+
 Base.eachindex(dset::SparseDataset) = CartesianIndices(size(dset))
 
 Base.axes(dset::SparseDataset) = map(Base.OneTo, size(dset))
-
-function Base.setindex!(
-    dset::SparseDataset,
-    X::Union{<:Number, Array{<:Number}},
-    I::HDF5.IndexType,
-    J::HDF5.IndexType,
-)
-    throw("not implemented")
-end

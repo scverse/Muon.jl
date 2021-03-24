@@ -36,7 +36,7 @@ mutable struct MuData
 end
 
 function readh5mu(filename::AbstractString; backed=true)
-    if backed
+    if !backed
         fid = h5open(filename, "r")
     else
         fid = h5open(filename, "r+")
