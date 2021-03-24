@@ -35,6 +35,26 @@ mutable struct AnnData
 
         return adata
     end
+
+    function AnnData(x::AbstractMatrix{<:Number},
+		     obs_names::Union{Vector{String}, Nothing}=nothing,
+		     var_names::Union{Vector{String}, Nothing}=nothing,
+		     )
+        adata = new(nothing)
+        adata.X = x
+
+        n, d = size(x)[1:2]
+
+        # Observations
+        # TODO: check size
+        adata.obs_names = isnothing(obs_names) ? string.(collect(1:n)) : obs_names
+
+        # Variables
+        # TODO: check size
+        adata.var_names = isnothing(var_names) ? string.(collect(1:d)) : obs_names
+
+        return adata
+    end
 end
 
 function readh5ad(filename::AbstractString; backed=true)
