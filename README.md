@@ -1,6 +1,8 @@
+![Muon.jl](https://user-images.githubusercontent.com/32863903/112323914-864a0f80-8cb2-11eb-91ae-375cdb61cd1b.png)
+
 # Muon for Julia
 
-Muon is [a Python library to work with multimodal data](https://github.com/gtca/muon). `Muon.jl` brings the ability to work with the same data structures to Julia.
+Muon is originally [a Python library to work with multimodal data](https://github.com/gtca/muon). `Muon.jl` brings the ability to work with the same data structures to Julia.
 
 `Muon.jl` implements I/O for `.h5mu` and `.h5ad` files as well as basic operations on the multimodal objects.
 
