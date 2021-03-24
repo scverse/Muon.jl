@@ -175,9 +175,18 @@ function Base.setindex!(dset::SparseDataset, x::Number, i::Integer, j::Integer)
         nonzeros(dset)[c1 + rowidx - 1] = x
     end
 end
-function Base.setindex!(dset::SparseDataset{<:Number}, x::AbstractArray{<:Number, 2}, I::AbstractUnitRange, J::AbstractUnitRange)
+function Base.setindex!(
+    dset::SparseDataset{<:Number},
+    x::AbstractArray{<:Number, 2},
+    I::AbstractUnitRange,
+    J::AbstractUnitRange,
+)
     @boundscheck checkbounds(dset, I, J)
-    length(x) == length(I) * length(J) || throw(DimensionMismatch("tried to assign $(length(x)) elements to destination of size $(length(I) * length(J))"))
+    length(x) == length(I) * length(J) || throw(
+        DimensionMismatch(
+            "tried to assign $(length(x)) elements to destination of size $(length(I) * length(J))",
+        ),
+    )
     if dset.csr
         I, J = J, I
         x = x'
