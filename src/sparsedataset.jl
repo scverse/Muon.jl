@@ -23,6 +23,13 @@ function Base.getproperty(dset::SparseDataset, s::Symbol)
     end
 end
 
+HDF5.filename(dset::SparseDataset) = HDF5.filename(dset.group)
+HDF5.copy_object(
+    src_obj::SparseDataset,
+    dst_parent::Union{HDF5.File, HDF5.Group},
+    dst_path::AbstractString,
+) = copy_object(src_obj.group, dst_parent, dst_path)
+
 getcolptr(dset::SparseDataset) = dset.group["indptr"]
 rowvals(dset::SparseDataset) = dset.group["indices"]
 nonzeros(dset::SparseDataset) = dset.group["data"]

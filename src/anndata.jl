@@ -19,25 +19,26 @@ mutable struct AnnData
 
         # Observations
         adata.obs, adata.obs_names = read_dataframe(file["obs"])
-        adata.obsm = "obsm" ∈ keys(file) ? read(file["obsm"]) : nothing
-        adata.obsp = "obsp" ∈ keys(file) ? read_dict_of_matrices(file["obsp"]) : nothing
+        adata.obsm = haskey(file, "obsm") ? read(file["obsm"]) : nothing
+        adata.obsp = haskey(file, "obsp") ? read_dict_of_matrices(file["obsp"]) : nothing
 
         # Variables
         adata.var, adata.var_names = read_dataframe(file["var"])
-        adata.varm = "varm" ∈ keys(file) ? read(file["varm"]) : nothing
-        adata.varp = "varp" ∈ keys(file) ? read_dict_of_matrices(file["varp"]) : nothing
+        adata.varm = haskey(file, "varm") ? read(file["varm"]) : nothing
+        adata.varp = haskey(file, "varp") ? read_dict_of_matrices(file["varp"]) : nothing
 
         # X
         adata.X = backed ? nothing : read_matrix(file["X"])
 
         # Layers
-        adata.layers = "layers" ∈ keys(file) ? read_dict_of_matrices(file["layers"]) : nothing
+        adata.layers = haskey(file, "layers") ? read_dict_of_matrices(file["layers"]) : nothing
 
         return adata
     end
 end
 
 function readh5ad(filename::AbstractString; backed=true)
+    filename = abspath(filename) # this gets stored in the HDF5 objects for backed datasets
     if !backed
         fid = h5open(filename, "r")
     else
@@ -55,11 +56,16 @@ function readh5ad(filename::AbstractString; backed=true)
 end
 
 function writeh5ad(filename::AbstractString, adata::AnnData)
-    file = h5open(filename, "w")
-    try
-        write(file, adata)
-    finally
-        close(file)
+    filename = abspath(filename)
+    if adata.file === nothing || filename != HDF5.filename(adata.file)
+        file = h5open(filename, "w")
+        try
+            write(file, adata)
+        finally
+            close(file)
+        end
+    else
+        write(adata)
     end
 end
 
@@ -69,18 +75,32 @@ function Base.write(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, 
 end
 
 function Base.write(parent::Union{HDF5.File, HDF5.Group}, adata::AnnData)
-    write(parent, "X", adata.X)
-    write(parent, "layers", adata.layers)
-    write(parent, "obs", adata.obs_names, adata.obs)
-    write(parent, "obsm", adata.obsm)
-    write(parent, "obsp", adata.obsp)
-    write(parent, "var", adata.var_names, adata.var)
-    write(parent, "varm", adata.varm)
-    write(parent, "varp", adata.varp)
+    if parent === adata.file
+        write(adata)
+    else
+        write_attr(parent, "X", adata.X)
+        write_unbacked(parent, adata)
+    end
 end
 
-Base.size(adata::AnnData) =
-    (length(adata.obs_names), length(adata.var_names))
+function Base.write(adata)
+    if adata.file === nothing
+        throw("adata is not backed, need somewhere to write to")
+    end
+    write_unbacked(adata.file, adata)
+end
+
+function write_unbacked(parent::Union{HDF5.File, HDF5.Group}, adata::AnnData)
+    write_attr(parent, "layers", adata.layers)
+    write_attr(parent, "obs", adata.obs_names, adata.obs)
+    write_attr(parent, "obsm", adata.obsm)
+    write_attr(parent, "obsp", adata.obsp)
+    write_attr(parent, "var", adata.var_names, adata.var)
+    write_attr(parent, "varm", adata.varm)
+    write_attr(parent, "varp", adata.varp)
+end
+
+Base.size(adata::AnnData) = (length(adata.obs_names), length(adata.var_names))
 
 function Base.show(io::IO, adata::AnnData)
     compact = get(io, :compact, false)

@@ -17,13 +17,13 @@ mutable struct MuData
 
         # Observations
         mdata.obs, mdata.obs_names = read_dataframe(file["obs"])
-        mdata.obsm = "obsm" ∈ keys(file) ? read(file["obsm"]) : nothing
-        mdata.obsp = "obsp" ∈ keys(file) ? read_dict_of_matrices(file["obsp"]) : nothing
+        mdata.obsm = haskey(file, "obsm") ? read(file["obsm"]) : nothing
+        mdata.obsp = haskey(file, "obsp") ? read_dict_of_matrices(file["obsp"]) : nothing
 
         # Variables
         mdata.var, mdata.var_names = read_dataframe(file["var"])
-        mdata.varm = "varm" ∈ keys(file) ? read(file["varm"]) : nothing
-        mdata.varp = "varp" ∈ keys(file) ? read_dict_of_matrices(file["varp"]) : nothing
+        mdata.varm = haskey(file, "varm") ? read(file["varm"]) : nothing
+        mdata.varp = haskey(file, "varp") ? read_dict_of_matrices(file["varp"]) : nothing
 
         # Modalities
         mdata.mod = Dict{String, AnnData}()
@@ -36,6 +36,7 @@ mutable struct MuData
 end
 
 function readh5mu(filename::AbstractString; backed=true)
+    filename = abspath(filename) # this gets stored in the HDF5 objects for backed datasets
     if !backed
         fid = h5open(filename, "r")
     else
@@ -53,29 +54,51 @@ function readh5mu(filename::AbstractString; backed=true)
 end
 
 function writeh5mu(filename::AbstractString, mudata::MuData)
-    file = h5open(filename, "w")
-    try
-        write(file, mudata)
-    finally
-        close(file)
+    filename = abspath(filename)
+    if mudata.file === nothing || filename != HDF5.filename(mudata.file)
+        file = h5open(filename, "w")
+        try
+            write(file, mudata)
+        finally
+            close(file)
+        end
+    else
+        write(mudata)
     end
 end
 
 function Base.write(parent::Union{HDF5.File, HDF5.Group}, mudata::MuData)
-    g = create_group(parent, "mod")
-    for (mod, adata) in mudata.mod
-        write(g, mod, adata)
+    if parent === mudata.file
+        write(mudata)
+    else
+        g = create_group(parent, "mod")
+        for (mod, adata) in mudata.mod
+            write(g, mod, adata)
+        end
+        write_metadata(parent, mudata)
     end
-    write(parent, "obs", mudata.obs_names, mudata.obs)
-    write(parent, "obsm", mudata.obsm)
-    write(parent, "obsp", mudata.obsp)
-    write(parent, "var", mudata.var_names, mudata.var)
-    write(parent, "varm", mudata.varm)
-    write(parent, "varp", mudata.varp)
 end
 
-Base.size(mdata::MuData) =
-    (length(mdata.obs_names), length(mdata.var_names))
+function Base.write(mudata::MuData)
+    if mudata.file === nothing
+        throw("adata is not backed, need somewhere to write to")
+    end
+    for adata in values(mudata.mod)
+        write(adata)
+    end
+    write_metadata(mudata.file, mudata)
+end
+
+function write_metadata(parent::Union{HDF5.File, HDF5.Group}, mudata::MuData)
+    write_attr(parent, "obs", mudata.obs_names, mudata.obs)
+    write_attr(parent, "obsm", mudata.obsm)
+    write_attr(parent, "obsp", mudata.obsp)
+    write_attr(parent, "var", mudata.var_names, mudata.var)
+    write_attr(parent, "varm", mudata.varm)
+    write_attr(parent, "varp", mudata.varp)
+end
+
+Base.size(mdata::MuData) = (length(mdata.obs_names), length(mdata.var_names))
 
 Base.getindex(mdata::MuData, modality::Symbol) = mdata.mod[String(modality)]
 Base.getindex(mdata::MuData, modality::AbstractString) = mdata.mod[modality]

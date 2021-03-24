@@ -63,28 +63,35 @@ function read_dict_of_matrices(f::HDF5.Group)
     return Dict(key => read_matrix(f[key]) for key in keys(f))
 end
 
-function Base.write(
+function write_attr(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, args...; kwargs...)
+    if haskey(parent, name)
+        delete_object(parent, name)
+    end
+    write_impl(parent, name, args...; kwargs...)
+end
+
+function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
     data::Dict{String, <:Any},
 )
     g = create_group(parent, name)
     for (key, val) in data
-        write(g, key, val)
+        write_impl(g, key, val)
     end
 end
 
-function Base.write(
+function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
     data::CategoricalVector,
 )
-    write(parent, name, data.refs)
-    write(parent, "__categories/$name", levels(data))
+    write_impl(parent, name, data.refs)
+    write_impl(parent, "__categories/$name", levels(data))
     attributes(parent[name])["categories"] = HDF5.Reference(parent["__categories"], name)
 end
 
-function Base.write(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, data::DataFrame)
+function write_impl(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, data::DataFrame)
     g = create_group(parent, name)
     attrs = attributes(g)
     attrs["encoding-type"] = "dataframe"
@@ -92,31 +99,31 @@ function Base.write(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, 
     attrs["column-order"] = names(data)
 
     for (name, column) in pairs(eachcol(data))
-        write(g, string(name), column)
+        write_impl(g, string(name), column)
     end
 end
 
-Base.write(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, ::Nothing, data::DataFrame) =
+write_impl(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, ::Nothing, data::DataFrame) =
     write(parent, name, data)
 
-function Base.write(
+function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
     rownames::Vector{String},
     data::DataFrame,
 )
-    write(parent, name, data)
+    write_impl(parent, name, data)
     idxname = "_index"
     columns = names(data)
     while idxname ∈ columns
         idxname = "_" * idxname
     end
     g = parent[name]
-    write(g, idxname, rownames)
+    write_impl(g, idxname, rownames)
     attributes(g)["_index"] = idxname
 end
 
-function Base.write(
+function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
     data::AbstractArray{<:Number};
@@ -134,11 +141,29 @@ function Base.write(
     write_dataset(d, dtype, data)
 end
 
-function Base.write(
+# variable-length strings cannot be compressed in HDF5
+function write_impl(
+    parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    data::AbstractArray{<:AbstractString};
+    extensible::Bool=false,
+    compress::UInt8=UInt8(0),
+)
+    if extensible
+        dims = (size(data), Tuple(-1 for _ in 1:ndims(data)))
+    else
+        dims = size(data)
+    end
+    dtype = datatype(data)
+    d = create_dataset(parent, name, dtype, dims)
+    write_dataset(d, dtype, data)
+end
+
+function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
     data::SparseMatrixCSC{<:Number, <:Integer};
-    transposed = false
+    transposed=false,
 )
     g = create_group(parent, name)
     attrs = attributes(g)
@@ -153,10 +178,16 @@ function Base.write(
     write(g, "data", data.nzval, extensible=true)
 end
 
-Base.write(
+write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
     data::Adjoint{T, SparseMatrixCSC{T, V}} where {T <: Number, V <: Integer},
-) = write(parent, name, data.parent, transposed=true)
+) = write_impl(parent, name, data.parent, transposed=true)
 
-Base.write(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, ::Nothing) = nothing
+write_impl(
+    parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    data::Union{HDF5.Dataset, SparseDataset},
+) = copy_object(data, parent, name)
+
+write_impl(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, ::Nothing) = nothing
