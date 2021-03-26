@@ -1,5 +1,3 @@
-using Muon
-
 @testset "create adata" begin
   n = 100
   x = rand(Float64, (n, 10))

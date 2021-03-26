@@ -98,7 +98,7 @@ function Base.getindex(dset::SparseDataset, I::AbstractUnitRange, J::AbstractUni
             currdata = data[c1:c2][rowidx]
             currrows = currrows[rowidx]
             sort!(rowidx, currdata, currrows)
-            push!(newrows, currrows)
+            push!(newrows, currrows .- first(I) .+ 1)
             push!(newdata, currdata)
         end
     end
@@ -125,41 +125,70 @@ Base.getindex(dset::SparseDataset, ::Colon, J::AbstractUnitRange) = dset[1:size(
 
 function _getindex(dset, i::Integer, J::AbstractUnitRange)
     colptr = getcolptr(dset)
-    rows = rowvals(dset)
-    c1, c2 = colptr[first(J)] + 1, colptr[last(J)]
-    rowidx = findall(x -> x == i - 1, rows[c1:c2])
+    c1, c2 = colptr[first(J)] + 1, colptr[last(J) + 1]
+    rows = rowvals(dset)[c1:c2] .+ 1
+    rowidx = findall(x -> x == i, rows)
+
+    if length(rowidx) == 0
+        return SparseVector(length(J), Vector{eltype(rowidx)}(), Vector{eltype(dset)}())
+    end
+
     data = nonzeros(dset)[c1:c2][rowidx]
 
+    cols = Vector{eltype(rowidx)}(undef, length(data))
+    i = 1
+    for j in J
+        if colptr[j] < rowidx[i] + c1 - 1 <= colptr[j + 1]
+            cols[i] = j - first(J) + 1
+            if i == length(rowidx)
+                break
+            end
+            i += 1
+        end
+    end
+
     sort!(rowidx, data)
-    return SparseVector(length(J), rowidx, data)
+    return SparseVector(length(J), cols, data)
 end
 
 function _getindex(dset, I::AbstractUnitRange, j::Integer)
     colptr = getcolptr(dset)
-    rows = rowvals(dset)
     c1, c2 = colptr[j] + 1, colptr[j + 1]
-    rowidx = findall(x -> x + 1 ∈ I, rows[c1:c2])
+    rows = rowvals(dset)[c1:c2] .+ 1
+    rowidx = findall(x -> x ∈ I, rows)
     data = nonzeros(dset)[c1:c2][rowidx]
 
     sort!(rowidx, data)
-    return SparseVector(length(I), rowidx, data)
+    return SparseVector(length(I), rows[rowidx] .- first(I) .+ 1, data)
 end
 
 function _getindex(dset, i::Integer, ::Colon)
-    rows = rowvals(dset)
+    rows = read(rowvals(dset))
     nz = nonzeros(dset)
     rowidx = findall(x -> x + 1 == i, rows)
     data = [nz[i] for i in rowidx]
 
-    sort!(rowidx, data)
-    return SparseVector(rawsize(dset)[2], rowidx, data)
+    cols = Vector{eltype(rowidx)}(undef, length(data))
+    colptr = getcolptr(dset)
+    i = 1
+    for (cstart, cend) in zip(1:(length(colptr) - 1), 2:length(colptr))
+        if colptr[cstart] < rowidx[i] <= colptr[cend]
+            cols[i] = cstart
+            if i == length(rowidx)
+                break
+            end
+            i += 1
+        end
+    end
+
+    return SparseVector(rawsize(dset)[2], cols, data)
 end
 
 function _getindex(dset, ::Colon, j::Integer)
     colptr = getcolptr(dset)
-    rows = rowvals(dset)
+    rows = read(rowvals(dset))
     c1, c2 = colptr[j] + 1, colptr[j + 1]
-    rowidx = rows[c1:c2]
+    rowidx = rows[c1:c2] .+ 1
     data = nonzeros(dset)[c1:c2]
 
     sort!(rowidx, data)
@@ -177,7 +206,7 @@ function Base.setindex!(dset::SparseDataset, x::Number, i::Integer, j::Integer)
     c1, c2 = cols[j] + 1, cols[j + 1]
     rowidx = findfirst(x -> x + 1 == i, rows[c1:c2])
     if rowidx === nothing && x != 0
-        throw("changing the sparsity structure of a SparseDataset is not supported")
+        throw(KeyError("changing the sparsity structure of a SparseDataset is not supported"))
     elseif x != 0
         nonzeros(dset)[c1 + rowidx - 1] = x
     end
@@ -208,11 +237,11 @@ function Base.setindex!(
         c1, c2 = cols[c] + 1, cols[c + 1]
         crows = rows[c1:c2] .+ 1
         rowidx = findall(x -> x ∈ I, crows)
-        xvals = x[I[I .∉ ((@view crows[rowidx]),)], ic]
+        xvals = x[I[I .∉ ((@view crows[rowidx]),)] .- first(I) .+ 1, ic]
         if length(rowidx) != length(I) && any(xvals .!= 0)
-            throw("changing the sparsity structure of a SparseDataset is not supported")
+            throw(KeyError("changing the sparsity structure of a SparseDataset is not supported"))
         end
-        append!(xidx, linxidx[crows[rowidx], ic])
+        append!(xidx, linxidx[crows[rowidx] .- first(I) .+ 1, ic])
         append!(dsetidx, c1 - 1 .+ rowidx)
     end
     # HDF5 doesn't support assignment using Arrays as indices, so we have to loop
