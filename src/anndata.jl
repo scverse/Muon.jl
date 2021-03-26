@@ -2,17 +2,17 @@ mutable struct AnnData
     file::Union{HDF5.File, HDF5.Group, Nothing}
 
     X::Union{AbstractMatrix{<:Number}, Nothing}
-    layers::Union{Dict{String, AbstractMatrix{<:Number}}, Nothing}
+    layers::Union{AbstractDict{<:AbstractString, AbstractMatrix{<:Number}}, Nothing}
 
     obs::Union{DataFrame, Nothing}
-    obs_names::Union{Vector{String}, Nothing}
-    obsm::Union{Dict{String, Any}, Nothing}
-    obsp::Union{Dict{String, AbstractMatrix{<:Number}}, Nothing}
+    obs_names::Union{AbstractVector{<:AbstractString}, Nothing}
+    obsm::Union{AbstractDict{<:AbstractString, AbstractArray{<:Number}}, Nothing}
+    obsp::Union{AbstractDict{<:AbstractString, AbstractMatrix{<:Number}}, Nothing}
 
     var::Union{DataFrame, Nothing}
-    var_names::Union{Vector{String}, Nothing}
-    varm::Union{Dict{String, Any}, Nothing}
-    varp::Union{Dict{String, AbstractMatrix{<:Number}}, Nothing}
+    var_names::Union{AbstractVector{<:AbstractString}, Nothing}
+    varm::Union{AbstractDict{<:AbstractString, AbstractArray{<:Number}}, Nothing}
+    varp::Union{AbstractDict{<:AbstractString, AbstractMatrix{<:Number}}, Nothing}
 
     function AnnData(file::Union{HDF5.File, HDF5.Group}, backed=true)
         adata = new(backed ? file : nothing)
@@ -36,24 +36,82 @@ mutable struct AnnData
         return adata
     end
 
-    function AnnData(x::AbstractMatrix{<:Number},
-		     obs_names::Union{Vector{String}, Nothing}=nothing,
-		     var_names::Union{Vector{String}, Nothing}=nothing,
-		     )
-        adata = new(nothing)
-        adata.X = x
+    function AnnData(;
+        X::AbstractMatrix{<:Number},
+        obs::Union{DataFrame, Nothing}=nothing,
+        obs_names::Union{AbstractVector{<:AbstractString}, Nothing}=nothing,
+        var::Union{DataFrame, Nothing}=nothing,
+        var_names::Union{AbstractVector{<:AbstractString}, Nothing}=nothing,
+        obsm::Union{AbstractDict{<:AbstractString, AbstractArray{<:Number}}, Nothing}=nothing,
+        varm::Union{AbstractDict{<:AbstractString, AbstractArray{<:Number}}, Nothing}=nothing,
+        obsp::Union{AbstractDict{<:AbstractString, AbstractMatrix{<:Number}}, Nothing}=nothing,
+        varp::Union{AbstractDict{<:AbstractString, AbstractMatrix{<:Number}}, Nothing}=nothing,
+        layers::Union{AbstractDict{<:AbstractString, AbstractMatrix{<:Number}}, Nothing}=nothing,
+    )
+        m, n = size(X)
+        if !isnothing(obs) && size(obs, 1) != m
+            throw(DimensionMismatch("X has $n rows, but obs has $(size(obs, 1)) rows"))
+        end
 
-        n, d = size(x)[1:2]
+        if isnothing(obs_names)
+            obs_names = string.(collect(1:m))
+        elseif length(obs_names) != m
+            throw(DimensionMismatch("X has $m rows, but $(length(obs_names)) obs_names given"))
+        end
 
-        # Observations
-        # TODO: check size
-        adata.obs_names = isnothing(obs_names) ? string.(collect(1:n)) : obs_names
+        if !isnothing(var) && size(var, 1) != n
+            throw(DimensionMismatch("X has $n columns, but var has $(size(var, 1)) rows"))
+        end
 
-        # Variables
-        # TODO: check size
-        adata.var_names = isnothing(var_names) ? string.(collect(1:d)) : obs_names
+        if isnothing(var_names)
+            var_names = string.(collect(1:n))
+        elseif length(var_names) != n
+            throw(DimensionMismatch("X has $m columns, but $(length(var_names)) var_names given"))
+        end
 
-        return adata
+        # TODO: custom Dict class that verifies shapes upon assignment
+        if !isnothing(obsm)
+            for (k, v) in obsm
+                if size(v, 1) != m
+                    throw(DimensionMismatch("X has $m rows, but obsm[$k] has $(size(v, 1)) rows"))
+                end
+            end
+        end
+        if !isnothing(varm)
+            for (k, v) in varm
+                if size(v, 1) != n
+                    throw(DimensionMismatch("X has $n columns, but varm[$k] has $(size(v, 1)) rows"))
+                end
+            end
+        end
+        if !isnothing(obsp)
+            for (k, v) in obsp
+                if size(v, 1) != size(v, 2)
+                    throw(DimensionMismatch("obsp[$k] is not square"))
+                elseif size(v, 1) != m
+                    throw(DimensionMismatch("X has $m rows, but obsp[$k] has $(size(v, 1)) rows"))
+                end
+            end
+        end
+        if !isnothing(varp)
+            for (k, v) in varp
+                if size(v, 1) != size(v, 2)
+                    throw(DimensionMismatch("varp[$k] is not square"))
+                elseif size(v, 1) != n
+                    throw(DimensionMismatch("X has $n columns, but varp[$k] has $(size(v, 1)) rows"))
+                end
+            end
+        end
+        if !isnothing(layers)
+            for (k, v) in layers
+                if size(v) != size(X)
+                    throw(DimensionMismatch("X has shape $(size(X)), but layers[$k] has shape $(size(v))"))
+                end
+            end
+        end
+
+
+        return new(nothing, X, layers, obs, obs_names, obsm, obsp, var, var_names, varm, varp)
     end
 end
 
