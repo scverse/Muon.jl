@@ -2,36 +2,56 @@ mutable struct AnnData
     file::Union{HDF5.File, HDF5.Group, Nothing}
 
     X::Union{AbstractMatrix{<:Number}, Nothing}
-    layers::Union{AbstractDict{<:AbstractString, AbstractMatrix{<:Number}}, Nothing}
 
     obs::Union{DataFrame, Nothing}
-    obs_names::Union{AbstractVector{<:AbstractString}, Nothing}
-    obsm::Union{AbstractDict{<:AbstractString, AbstractArray{<:Number}}, Nothing}
-    obsp::Union{AbstractDict{<:AbstractString, AbstractMatrix{<:Number}}, Nothing}
+    obs_names::AbstractVector{<:AbstractString}
 
     var::Union{DataFrame, Nothing}
-    var_names::Union{AbstractVector{<:AbstractString}, Nothing}
-    varm::Union{AbstractDict{<:AbstractString, AbstractArray{<:Number}}, Nothing}
-    varp::Union{AbstractDict{<:AbstractString, AbstractMatrix{<:Number}}, Nothing}
+    var_names::AbstractVector{<:AbstractString}
+
+    obsm::StrAlignedMapping{Tuple{1 => 1}, AnnData}
+    obsp::StrAlignedMapping{Tuple{1 => 1, 2 => 1}, AnnData}
+
+    varm::StrAlignedMapping{Tuple{1 => 2}, AnnData}
+    varp::StrAlignedMapping{Tuple{1 => 2, 2 => 2}, AnnData}
+
+    layers::StrAlignedMapping{Tuple{1 => 1, 2 => 2}, AnnData}
 
     function AnnData(file::Union{HDF5.File, HDF5.Group}, backed=true)
         adata = new(backed ? file : nothing)
 
-        # Observations
+        # this needs to go first because it's used by size() and size()
+        # is used for dimensionalty checks
         adata.obs, adata.obs_names = read_dataframe(file["obs"])
-        adata.obsm = haskey(file, "obsm") ? read(file["obsm"]) : nothing
-        adata.obsp = haskey(file, "obsp") ? read_dict_of_matrices(file["obsp"]) : nothing
+        adata.var, adata.var_names = read_dataframe(file["var"])
+
+        # observations
+        adata.obsm = StrAlignedMapping{Tuple{1 => 1}}(
+            adata,
+            haskey(file, "obsm") ? read_dict_of_mixed(file["obsm"]) : nothing,
+        )
+        adata.obsp = StrAlignedMapping{Tuple{1 => 1, 2 => 1}}(
+            adata,
+            haskey(file, "obsp") ? read_dict_of_matrices(file["obsp"]) : nothing,
+        )
 
         # Variables
-        adata.var, adata.var_names = read_dataframe(file["var"])
-        adata.varm = haskey(file, "varm") ? read(file["varm"]) : nothing
-        adata.varp = haskey(file, "varp") ? read_dict_of_matrices(file["varp"]) : nothing
+        adata.varm = StrAlignedMapping{Tuple{1 => 2}}(
+            adata,
+            haskey(file, "varm") ? read_dict_of_mixed(file["varm"]) : nothing,
+        )
+        adata.varp = StrAlignedMapping{Tuple{1 => 2, 2 => 2}}(
+            adata, haskey(file, "varp") ? read_dict_of_matrices(file["varp"]) : nothing,
+        )
 
         # X
         adata.X = backed ? nothing : read_matrix(file["X"])
 
         # Layers
-        adata.layers = haskey(file, "layers") ? read_dict_of_matrices(file["layers"]) : nothing
+        adata.layers = StrAlignedMapping{Tuple{1 => 1, 2 => 2}}(
+            adata,
+            haskey(file, "layers") ? read_dict_of_matrices(file["layers"]) : nothing,
+        )
 
         return adata
     end
@@ -68,50 +88,14 @@ mutable struct AnnData
         elseif length(var_names) != n
             throw(DimensionMismatch("X has $m columns, but $(length(var_names)) var_names given"))
         end
+        adata = new(nothing, X, obs, obs_names, var, var_names)
+        adata.obsm = StrAlignedMapping{Tuple{1 => 1}}(adata, obsm)
+        adata.obsp = StrAlignedMapping{Tuple{1 => 1, 2 => 1}}(adata, obsp)
+        adata.varm = StrAlignedMapping{Tuple{1 => 2}}(adata, varm)
+        adata.varp = StrAlignedMapping{Tuple{1 => 2, 2 => 2}}(adata, varp)
+        adata.layers = StrAlignedMapping{Tuple{1 => 1, 2 => 2}}(adata, layers)
 
-        # TODO: custom Dict class that verifies shapes upon assignment
-        if !isnothing(obsm)
-            for (k, v) in obsm
-                if size(v, 1) != m
-                    throw(DimensionMismatch("X has $m rows, but obsm[$k] has $(size(v, 1)) rows"))
-                end
-            end
-        end
-        if !isnothing(varm)
-            for (k, v) in varm
-                if size(v, 1) != n
-                    throw(DimensionMismatch("X has $n columns, but varm[$k] has $(size(v, 1)) rows"))
-                end
-            end
-        end
-        if !isnothing(obsp)
-            for (k, v) in obsp
-                if size(v, 1) != size(v, 2)
-                    throw(DimensionMismatch("obsp[$k] is not square"))
-                elseif size(v, 1) != m
-                    throw(DimensionMismatch("X has $m rows, but obsp[$k] has $(size(v, 1)) rows"))
-                end
-            end
-        end
-        if !isnothing(varp)
-            for (k, v) in varp
-                if size(v, 1) != size(v, 2)
-                    throw(DimensionMismatch("varp[$k] is not square"))
-                elseif size(v, 1) != n
-                    throw(DimensionMismatch("X has $n columns, but varp[$k] has $(size(v, 1)) rows"))
-                end
-            end
-        end
-        if !isnothing(layers)
-            for (k, v) in layers
-                if size(v) != size(X)
-                    throw(DimensionMismatch("X has shape $(size(X)), but layers[$k] has shape $(size(v))"))
-                end
-            end
-        end
-
-
-        return new(nothing, X, layers, obs, obs_names, obsm, obsp, var, var_names, varm, varp)
+        return adata
     end
 end
 
@@ -179,6 +163,7 @@ function write_unbacked(parent::Union{HDF5.File, HDF5.Group}, adata::AnnData)
 end
 
 Base.size(adata::AnnData) = (length(adata.obs_names), length(adata.var_names))
+Base.size(adata::AnnData, d::Integer) = size(adata)[d]
 
 function Base.show(io::IO, adata::AnnData)
     compact = get(io, :compact, false)

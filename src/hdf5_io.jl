@@ -28,7 +28,13 @@ function read_dataframe(tablegroup::HDF5.Group)
     return df, rownames
 end
 
-read_matrix(f::HDF5.Dataset) = read(f)
+function read_matrix(f::HDF5.Dataset)
+    mat = read(f)
+    if ndims(mat) > 1
+        mat = mat' # transpose for h5py compatibility
+    end
+    return mat
+end
 
 function read_matrix(f::HDF5.Group)
     enctype = read_attribute(f, "encoding-type")
@@ -61,6 +67,26 @@ end
 
 function read_dict_of_matrices(f::HDF5.Group)
     return Dict(key => read_matrix(f[key]) for key in keys(f))
+end
+
+read_auto(f::HDF5.Dataset) = (read_matrix(f), nothing)
+function read_auto(f::HDF5.Group)
+    enctype = read_attribute(f, "encoding-type")
+    if enctype == "dataframe"
+        return read_dataframe(f)
+    elseif endswith(enctype, "matrix")
+        return read_matrix(f), nothing
+    else
+        throw("unknown encoding $enctype")
+    end
+end
+
+function read_dict_of_mixed(f::HDF5.Group)
+    ret = Dict{String, Any}()
+    for k in keys(f)
+        ret[k] = read_auto(f[k])[1] # assume data frames are properly aligned, so we can discard rownames
+    end
+    return ret
 end
 
 function write_attr(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, args...; kwargs...)
@@ -126,35 +152,35 @@ end
 function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
-    data::AbstractArray{<:Number};
+    data::AbstractArray;
     extensible::Bool=false,
     compress::UInt8=UInt8(9),
 )
-    chunksize = HDF5.heuristic_chunk(data)
+    if ndims(data) > 1
+        data = data' # for h5py compatibility
+    end
+
     if extensible
         dims = (size(data), Tuple(-1 for _ in 1:ndims(data)))
     else
         dims = size(data)
     end
     dtype = datatype(data)
+    write_impl_array(parent, name, dtype, dims, compress)
+end
+
+function write_impl_array(parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    data::AbstractArray{<:Number}, dtype::HDF5.Datatype, dims::Tuple{Vararg{<:Integer}}, compress::UInt8)
+    chunksize = HDF5.heuristic_chunk(data)
     d = create_dataset(parent, name, dtype, dims, chunk=chunksize, compress=compress)
     write_dataset(d, dtype, data)
 end
 
 # variable-length strings cannot be compressed in HDF5
-function write_impl(
-    parent::Union{HDF5.File, HDF5.Group},
+function write_impl_array(parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
-    data::AbstractArray{<:AbstractString};
-    extensible::Bool=false,
-    compress::UInt8=UInt8(0),
-)
-    if extensible
-        dims = (size(data), Tuple(-1 for _ in 1:ndims(data)))
-    else
-        dims = size(data)
-    end
-    dtype = datatype(data)
+    data::AbstractArray{<:AbstractString}, dtype::HDF5.Datatype, dims::Tuple{Vararg{<:Integer}}, compress::UInt8)
     d = create_dataset(parent, name, dtype, dims)
     write_dataset(d, dtype, data)
 end

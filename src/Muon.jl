@@ -13,6 +13,7 @@ export AnnData, MuData
 include("util.jl")
 include("sparsedataset.jl")
 include("hdf5_io.jl")
+include("alignedmapping.jl")
 include("anndata.jl")
 include("mudata.jl")
 

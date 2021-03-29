@@ -99,6 +99,7 @@ function write_metadata(parent::Union{HDF5.File, HDF5.Group}, mudata::MuData)
 end
 
 Base.size(mdata::MuData) = (length(mdata.obs_names), length(mdata.var_names))
+Base.size(mdata::MuData, d::Integer) = size(mdata)[d]
 
 Base.getindex(mdata::MuData, modality::Symbol) = mdata.mod[String(modality)]
 Base.getindex(mdata::MuData, modality::AbstractString) = mdata.mod[modality]
