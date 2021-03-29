@@ -179,7 +179,7 @@ isbacked(adata::AnnData) = adata.file !== nothing
 function Base.getproperty(adata::AnnData, s::Symbol)
     if s === :X && isbacked(adata)
         X = adata.file["X"]
-        return X isa HDF5.Dataset ? X : SparseDataset(X)
+        return X isa HDF5.Dataset ? TransposedDataset(X) : SparseDataset(X)
     else
         return getfield(adata, s)
     end
