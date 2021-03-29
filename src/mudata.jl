@@ -1,29 +1,32 @@
 mutable struct MuData
     file::Union{HDF5.File, Nothing}
-    mod::Union{Dict{String, AnnData}, Nothing}
+    mod::Dict{String, AnnData}
 
     obs::Union{DataFrame, Nothing}
-    obs_names::Union{Vector{String}, Nothing}
-    obsm::Union{Dict{String, Any}, Nothing}
-    obsp::Union{Dict{String, AbstractMatrix{<:Number}}, Nothing}
+    obs_names::AbstractVector{<:AbstractString}
+    obsm::StrAlignedMapping{Tuple{1 => 1}, MuData}
+    obsp::StrAlignedMapping{Tuple{1 => 1, 2 => 1}, MuData}
 
     var::Union{DataFrame, Nothing}
-    var_names::Union{Vector{String}, Nothing}
-    varm::Union{Dict{String, Any}, Nothing}
-    varp::Union{Dict{String, AbstractMatrix{<:Number}}, Nothing}
+    var_names::AbstractVector{<:AbstractString}
+    varm::StrAlignedMapping{Tuple{1 => 2}, MuData}
+    varp::StrAlignedMapping{Tuple{1 => 2, 2 => 2}, MuData}
 
     function MuData(file::HDF5.File, backed=true)
         mdata = new(backed ? file : nothing)
 
-        # Observations
+        # this needs to go first because it's used by size() and size()
+        # is used for dimensionalty checks
         mdata.obs, mdata.obs_names = read_dataframe(file["obs"])
-        mdata.obsm = haskey(file, "obsm") ? read(file["obsm"]) : nothing
-        mdata.obsp = haskey(file, "obsp") ? read_dict_of_matrices(file["obsp"]) : nothing
+        mdata.var, mdata.var_names = read_dataframe(file["var"])
+
+        # Observations
+        mdata.obsm = StrAlignedMapping{Tuple{1 => 1}}(mdata, haskey(file, "obsm") ? read_dict_of_mixed(file["obsm"]) : nothing)
+        mdata.obsp = StrAlignedMapping{Tuple{1 => 1, 2 => 1}}(mdata, haskey(file, "obsp") ? read_dict_of_matrices(file["obsp"]) : nothing)
 
         # Variables
-        mdata.var, mdata.var_names = read_dataframe(file["var"])
-        mdata.varm = haskey(file, "varm") ? read(file["varm"]) : nothing
-        mdata.varp = haskey(file, "varp") ? read_dict_of_matrices(file["varp"]) : nothing
+        mdata.varm = StrAlignedMapping{Tuple{1 => 2}}(mdata, haskey(file, "varm") ? read_dict_of_mixed(file["varm"]) : nothing)
+        mdata.varp = StrAlignedMapping{Tuple{1 => 2, 2 => 2}}(mdata, haskey(file, "varp") ? read_dict_of_matrices(file["varp"]) : nothing)
 
         # Modalities
         mdata.mod = Dict{String, AnnData}()
