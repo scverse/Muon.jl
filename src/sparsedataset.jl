@@ -17,7 +17,7 @@ function Base.getproperty(dset::SparseDataset, s::Symbol)
     elseif s === :file
         return getfield(dset, :group).file
     elseif s === :xfer
-        return getfield(dset, :group).xfer
+        return Tuple(d.xfer for d in getfield(dset, :group))
     else
         return getfield(dset, s)
     end
@@ -29,6 +29,7 @@ HDF5.copy_object(
     dst_parent::Union{HDF5.File, HDF5.Group},
     dst_path::AbstractString,
 ) = copy_object(src_obj.group, dst_parent, dst_path)
+HDF5.isvalid(dset::SparseDataset) = isvalid(dset.group)
 
 getcolptr(dset::SparseDataset) = dset.group["indptr"]
 rowvals(dset::SparseDataset) = dset.group["indices"]
@@ -253,4 +254,18 @@ end
 
 Base.eachindex(dset::SparseDataset) = CartesianIndices(size(dset))
 
-Base.axes(dset::SparseDataset) = map(Base.OneTo, size(dset))
+function Base.show(io::IO, dset::SparseDataset)
+    if isvalid(dset)
+        print(io, "Sparse HDF5 dataset: ", HDF5.name(dset.group), " (file: ", dset.file.filename, " xfer_mode: ", Tuple(x.id for x in dset.xfer), ")")
+    else
+        print(io, "Sparse HDF5 datset: (invalid)")
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", dset::SparseDataset)
+    if get(io, :compact, false)::Bool
+        show(io, dset)
+    else
+        print(io, HDF5._tree_icon(HDF5.Dataset), " ", dset)
+    end
+end

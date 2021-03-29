@@ -11,12 +11,25 @@ struct TransposedDataset{T, N} <: AbstractArray{T, N}
     end
 end
 
+function Base.getproperty(dset::TransposedDataset, s::Symbol)
+    if s === :id
+        return getfield(dset, :dset).id
+    elseif s === :file
+        return getfield(dset, :dset).file
+    elseif s === :xfer
+        return getfield(dset, :dset).xfer
+    else
+        return getfield(dset, s)
+    end
+end
+
 HDF5.filename(dset::TransposedDataset) = HDF5.filename(dset.dset)
 HDF5.copy_object(
     src_obj::TransposedDataset,
     dst_parent::Union{HDF5.File, HDF5.Group},
     dst_path::AbstractString,
 ) = copy_object(src_obj.dset, dst_parent, dst_path)
+HDF5.isvalid(dset::TransposedDataset) = isvalid(dset.dset)
 
 Base.ndims(dset::TransposedDataset) = ndims(dset.dset)
 Base.size(dset::TransposedDataset) = reverse(size(dset.dset))
@@ -35,3 +48,19 @@ Base.setindex!(dset::TransposedDataset, v, I::Vararg{Int, N}) where N = setindex
 Base.setindex!(dset::TransposedDataset, v, I...) = setIndex!(dset.dset, reverse(I)...)
 
 Base.eachindex(dset::TransposedDataset) = CartesianIndices(size(dset))
+
+function Base.show(io::IO, dset::TransposedDataset)
+    if isvalid(dset)
+        print(io, "Transposed HDF5 dataset: ", HDF5.name(dset.dset), " (file: ", dset.file.filename, " xfer_mode: ", dset.xfer.id, ")")
+    else
+        print(io, "Transposed HDF5 datset: (invalid)")
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", dset::TransposedDataset)
+    if get(io, :compact, false)::Bool
+        show(io, dset)
+    else
+        print(io, HDF5._tree_icon(HDF5.Dataset), " ", dset)
+    end
+end
