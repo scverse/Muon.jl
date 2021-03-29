@@ -99,7 +99,7 @@ end
 function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
-    data::Dict{String, <:Any},
+    data::AbstractDict{String, <:Any},
 )
     g = create_group(parent, name)
     for (key, val) in data
@@ -157,8 +157,8 @@ function write_impl(
     compress::UInt8=UInt8(9),
 )
     if ndims(data) > 1
-        data = data' # for h5py compatibility
-    end
+        data = copy(data') # transpose for h5py compatibility
+    end                    # copy because HDF5 apparently can't handle lazy Adjoints
 
     if extensible
         dims = (size(data), Tuple(-1 for _ in 1:ndims(data)))
@@ -166,7 +166,7 @@ function write_impl(
         dims = size(data)
     end
     dtype = datatype(data)
-    write_impl_array(parent, name, dtype, dims, compress)
+    write_impl_array(parent, name, data, dtype, dims, compress)
 end
 
 function write_impl_array(parent::Union{HDF5.File, HDF5.Group},
@@ -213,7 +213,7 @@ write_impl(
 write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
-    data::Union{HDF5.Dataset, SparseDataset},
+    data::Union{HDF5.Dataset, SparseDataset, TransposedDataset},
 ) = copy_object(data, parent, name)
 
 write_impl(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, ::Nothing) = nothing
