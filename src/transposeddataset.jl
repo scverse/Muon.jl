@@ -41,11 +41,27 @@ HDF5.datatype(dset::TransposedDataset) = datatype(dset.dset)
 Base.read(dset::TransposedDataset) = read_matrix(dset.dset)
 
 Base.getindex(dset::TransposedDataset, i::Integer) = getindex(dset.dset, ndims(dset.dset) - d + 1)
-Base.getindex(dset::TransposedDataset, I::Vararg{<:Integer, N}) where N = getindex(dset.dset, reverse(I)...)'
-Base.getindex(dset::TransposedDataset, I...) = getindex(dset.dset, reverse(I)...)'
+function Base.getindex(dset::TransposedDataset, I::Vararg{<:Integer, N}) where N
+    mat = getindex(dset.dset, reverse(I)...)
+    return ndims(mat) == 1 ? mat : mat'
+end
+function Base.getindex(dset::TransposedDataset, I...)
+    mat = getindex(dset.dset, reverse(I)...)
+    return ndims(mat) == 1 ? mat : mat'
+end
 Base.setindex!(dset::TransposedDataset, v, i::Int) = setindex!(dset.dset, v, ndims(dset.dset) - d + 1)
-Base.setindex!(dset::TransposedDataset, v, I::Vararg{Int, N}) where N = setindex!(dset.dset, v', reverse(I)...)
-Base.setindex!(dset::TransposedDataset, v, I...) = setindex!(dset.dset, v', reverse(I)...)
+function Base.setindex!(dset::TransposedDataset, v, I::Vararg{Int, N}) where N
+    if ndims(v) > 1
+        v = copy(v')
+    end
+    setindex!(dset.dset, v, reverse(I)...)
+end
+function Base.setindex!(dset::TransposedDataset, v, I...)
+    if ndims(v) > 1
+        v = copy(v')
+    end
+    setindex!(dset.dset, v, reverse(I)...)
+end
 
 Base.eachindex(dset::TransposedDataset) = CartesianIndices(size(dset))
 
