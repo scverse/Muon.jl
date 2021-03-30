@@ -15,7 +15,7 @@ mutable struct AnnData
     varm::StrAlignedMapping{Tuple{1 => 2}, AnnData}
     varp::StrAlignedMapping{Tuple{1 => 2, 2 => 2}, AnnData}
 
-    layers::StrAlignedMapping{Tuple{1 => 1, 2 => 2}, AnnData}
+    layers::AbstractAlignedMapping{Tuple{1 => 1, 2 => 2}, String}
 
     function AnnData(file::Union{HDF5.File, HDF5.Group}, backed=true)
         adata = new(backed ? file : nothing)
@@ -41,17 +41,22 @@ mutable struct AnnData
             haskey(file, "varm") ? read_dict_of_mixed(file["varm"]) : nothing,
         )
         adata.varp = StrAlignedMapping{Tuple{1 => 2, 2 => 2}}(
-            adata, haskey(file, "varp") ? read_dict_of_matrices(file["varp"]) : nothing,
+            adata,
+            haskey(file, "varp") ? read_dict_of_matrices(file["varp"]) : nothing,
         )
 
         # X
         adata.X = backed ? nothing : read_matrix(file["X"])
 
         # Layers
-        adata.layers = StrAlignedMapping{Tuple{1 => 1, 2 => 2}}(
-            adata,
-            haskey(file, "layers") ? read_dict_of_matrices(file["layers"]) : nothing,
-        )
+        if !backed
+            adata.layers = StrAlignedMapping{Tuple{1 => 1, 2 => 2}}(
+                adata,
+                haskey(file, "layers") ? read_dict_of_matrices(file["layers"]) : nothing,
+            )
+        else
+            adata.layers = BackedAlignedMapping{Tuple{1 => 1, 2 => 2}}(adata, adata.file, "layers")
+        end
 
         return adata
     end
@@ -178,8 +183,7 @@ isbacked(adata::AnnData) = adata.file !== nothing
 
 function Base.getproperty(adata::AnnData, s::Symbol)
     if s === :X && isbacked(adata)
-        X = adata.file["X"]
-        return X isa HDF5.Dataset ? TransposedDataset(X) : SparseDataset(X)
+        return backed_matrix(adata.file["X"])
     else
         return getfield(adata, s)
     end
