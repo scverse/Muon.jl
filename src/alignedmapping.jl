@@ -22,7 +22,7 @@ mutable struct BackedAlignedMapping{T <: Tuple, R} <:
 
     function BackedAlignedMapping{T}(r, g::HDF5.Group) where {T <: Tuple}
         for k in keys(g)
-            checkdim(T, backed_matrix(g, k), r, k)
+            checkdim(T, backed_matrix(g[k]), r, k)
         end
         return new{T, typeof(r)}(r, g, nothing, nothing)
     end
@@ -163,3 +163,23 @@ function Base.setindex!(d::BackedAlignedMapping{T}, v::AbstractArray, k) where {
 end
 
 const StrAlignedMapping{T <: Tuple, R} = AlignedMapping{T, String, R}
+
+function copy_subset(
+    src::AbstractAlignedMapping{T},
+    dst::AbstractAlignedMapping,
+    I,
+    J,
+) where {T <: Tuple}
+    idx = (
+        if refdim == 1
+            I
+        elseif refdim == 2
+            J
+        else
+            Colon()
+        end for (vdim, refdim) in T.parameters
+    )
+    for (k, v) in src
+        dst[k] = v[idx..., (Colon() for i in 1:(ndims(v) - length(idx)))...]
+    end
+end

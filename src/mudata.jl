@@ -21,12 +21,24 @@ mutable struct MuData
         mdata.var, mdata.var_names = read_dataframe(file["var"])
 
         # Observations
-        mdata.obsm = StrAlignedMapping{Tuple{1 => 1}}(mdata, haskey(file, "obsm") ? read_dict_of_mixed(file["obsm"]) : nothing)
-        mdata.obsp = StrAlignedMapping{Tuple{1 => 1, 2 => 1}}(mdata, haskey(file, "obsp") ? read_dict_of_matrices(file["obsp"]) : nothing)
+        mdata.obsm = StrAlignedMapping{Tuple{1 => 1}}(
+            mdata,
+            haskey(file, "obsm") ? read_dict_of_mixed(file["obsm"]) : nothing,
+        )
+        mdata.obsp = StrAlignedMapping{Tuple{1 => 1, 2 => 1}}(
+            mdata,
+            haskey(file, "obsp") ? read_dict_of_matrices(file["obsp"]) : nothing,
+        )
 
         # Variables
-        mdata.varm = StrAlignedMapping{Tuple{1 => 2}}(mdata, haskey(file, "varm") ? read_dict_of_mixed(file["varm"]) : nothing)
-        mdata.varp = StrAlignedMapping{Tuple{1 => 2, 2 => 2}}(mdata, haskey(file, "varp") ? read_dict_of_matrices(file["varp"]) : nothing)
+        mdata.varm = StrAlignedMapping{Tuple{1 => 2}}(
+            mdata,
+            haskey(file, "varm") ? read_dict_of_mixed(file["varm"]) : nothing,
+        )
+        mdata.varp = StrAlignedMapping{Tuple{1 => 2, 2 => 2}}(
+            mdata,
+            haskey(file, "varp") ? read_dict_of_matrices(file["varp"]) : nothing,
+        )
 
         # Modalities
         mdata.mod = Dict{String, AnnData}()
@@ -34,6 +46,41 @@ mutable struct MuData
         for modality in mods
             mdata.mod[modality] = AnnData(file["mod"][modality], backed)
         end
+        return mdata
+    end
+
+    function MuData(;
+        mod::AbstractDict{<:AbstractString, AnnData}=nothing,
+        obs::Union{DataFrame, Nothing}=nothing,
+        obs_names::Union{AbstractVector{<:AbstractString}, Nothing}=nothing,
+        var::Union{DataFrame, Nothing}=nothing,
+        var_names::Union{AbstractVector{<:AbstractString}, Nothing}=nothing,
+        obsm::Union{
+            AbstractDict{<:AbstractString, Union{AbstractArray{<:Number}, DataFrame}},
+            Nothing,
+        }=nothing,
+        varm::Union{
+            AbstractDict{<:AbstractString, Union{AbstractArray{<:Number}, DataFrame}},
+            Nothing,
+        }=nothing,
+        obsp::Union{AbstractDict{<:AbstractString, AbstractMatrix{<:Number}}, Nothing}=nothing,
+        varp::Union{AbstractDict{<:AbstractString, AbstractMatrix <: Number}, Nothing}=nothing,
+    )
+        mdata = new(nothing, Dict{String, AnnData}())
+        if !isnothing(mod)
+            merge!(mdata.mod, mod)
+        end
+
+        # TODO: dimension checking. This needs merging dimensions of all the AnnDatas based on var_names/obs_names
+        mdata.obs = obs
+        mdata.obs_names = isnothing(obs_names) ? String[] : obs_names
+        mdata.var = var
+        mdata.var_names = isnothing(var_names) ? String[] : var_names
+
+        mdata.obsm = StrAlignedMapping{Tuple{1 => 1}}(mdata, obsm)
+        mdata.varm = StrAlignedMapping{Tuple{1 => 2}}(mdata, varm)
+        mdata.obsp = StrAlignedMapping{Tuple{1 => 1, 2 => 1}}(mdata, obsp)
+        mdata.varp = StrAlignedMapping{Tuple{1 => 2, 2 => 2}}(mdata, varp)
         return mdata
     end
 end
@@ -106,6 +153,25 @@ Base.size(mdata::MuData, d::Integer) = size(mdata)[d]
 
 Base.getindex(mdata::MuData, modality::Symbol) = mdata.mod[String(modality)]
 Base.getindex(mdata::MuData, modality::AbstractString) = mdata.mod[modality]
+function Base.getindex(
+    mdata::MuData,
+    I::Union{AbstractUnitRange, Colon, Vector{<:Integer}},
+    J::Union{AbstractUnitRange, Colon, Vector{<:Integer}},
+)
+    # TODO: handle AnnDatas with non-overlapping / partially overlapping cell sets
+    newmu = MuData(
+        mod=Dict{String, AnnData}(k => ad[I, J] for (k, ad) in mdata.mod),
+        obs=isnothing(mdata.obs) || nrow(mdata.obs) == 0 ? nothing : mdata.obs[I, :],
+        obs_names=mdata.obs_names[I],
+        var=isnothing(mdata.var) || nrow(mdata.var) == 0 ? nothing : mdata.var[J, :],
+        var_names=mdata.var_names[J],
+    )
+    copy_subset(mdata.obsm, newmu.obsm, I, J)
+    copy_subset(mdata.varm, newmu.varm, I, J)
+    copy_subset(mdata.obsp, newmu.obsp, I, J)
+    copy_subset(mdata.varp, newmu.varp, I, J)
+    return newmu
+end
 
 function Base.show(io::IO, mdata::MuData)
     compact = get(io, :compact, false)

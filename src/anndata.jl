@@ -67,15 +67,21 @@ mutable struct AnnData
         obs_names::Union{AbstractVector{<:AbstractString}, Nothing}=nothing,
         var::Union{DataFrame, Nothing}=nothing,
         var_names::Union{AbstractVector{<:AbstractString}, Nothing}=nothing,
-        obsm::Union{AbstractDict{<:AbstractString, AbstractArray{<:Number}}, Nothing}=nothing,
-        varm::Union{AbstractDict{<:AbstractString, AbstractArray{<:Number}}, Nothing}=nothing,
+        obsm::Union{
+            AbstractDict{<:AbstractString, Union{AbstractArray{<:Number}, DataFrame}},
+            Nothing,
+        }=nothing,
+        varm::Union{
+            AbstractDict{<:AbstractString, Union{AbstractArray{<:Number}, DataFrame}},
+            Nothing,
+        }=nothing,
         obsp::Union{AbstractDict{<:AbstractString, AbstractMatrix{<:Number}}, Nothing}=nothing,
         varp::Union{AbstractDict{<:AbstractString, AbstractMatrix{<:Number}}, Nothing}=nothing,
         layers::Union{AbstractDict{<:AbstractString, AbstractMatrix{<:Number}}, Nothing}=nothing,
     )
         m, n = size(X)
         if !isnothing(obs) && size(obs, 1) != m
-            throw(DimensionMismatch("X has $n rows, but obs has $(size(obs, 1)) rows"))
+            throw(DimensionMismatch("X has $m rows, but obs has $(size(obs, 1)) rows"))
         end
 
         if isnothing(obs_names)
@@ -91,7 +97,7 @@ mutable struct AnnData
         if isnothing(var_names)
             var_names = string.(collect(1:n))
         elseif length(var_names) != n
-            throw(DimensionMismatch("X has $m columns, but $(length(var_names)) var_names given"))
+            throw(DimensionMismatch("X has $n columns, but $(length(var_names)) var_names given"))
         end
         adata = new(nothing, X, obs, obs_names, var, var_names)
         adata.obsm = StrAlignedMapping{Tuple{1 => 1}}(adata, obsm)
@@ -187,4 +193,24 @@ function Base.getproperty(adata::AnnData, s::Symbol)
     else
         return getfield(adata, s)
     end
+end
+
+function Base.getindex(
+    adata::AnnData,
+    I::Union{AbstractUnitRange, Colon, Vector{<:Integer}},
+    J::Union{AbstractUnitRange, Colon, Vector{<:Integer}},
+)
+    newad = AnnData(
+        X=adata.X[I, J],
+        obs=isnothing(adata.obs) ? nothing : adata.obs[I, :],
+        obs_names=adata.obs_names[I],
+        var=isnothing(adata.var) ? nothing : adata.var[J, :],
+        var_names=adata.var_names[J],
+    )
+    copy_subset(adata.obsm, newad.obsm, I, J)
+    copy_subset(adata.varm, newad.varm, I, J)
+    copy_subset(adata.obsp, newad.obsp, I, J)
+    copy_subset(adata.varp, newad.varp, I, J)
+    copy_subset(adata.layers, newad.layers, I, J)
+    return newad
 end

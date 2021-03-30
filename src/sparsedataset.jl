@@ -87,11 +87,11 @@ function Base.getindex(dset::SparseDataset, I::AbstractUnitRange, J::AbstractUni
 
     newcols = Vector{eltype(colptr)}(undef, length(J) + 1)
     newcols[1] = 1
-    newrows = Vector{Vector{eltype(rows)}}()
-    newdata = Vector{Vector{eltype(dset)}}()
+    newrows = Vector{eltype(rows)}()
+    newdata = Vector{eltype(dset)}()
     for (nc, c) in enumerate(J)
         c1, c2 = colptr[c] + 1, colptr[c + 1]
-        currrows = rows[c1:c2] .+ 1
+        currrows = rows[c1:c2] .+ convert(eltype(rows), 1)
         rowidx = findall(x -> x ∈ I, currrows)
         newcols[nc + 1] = newcols[nc] + length(rowidx)
 
@@ -99,8 +99,8 @@ function Base.getindex(dset::SparseDataset, I::AbstractUnitRange, J::AbstractUni
             currdata = data[c1:c2][rowidx]
             currrows = currrows[rowidx]
             sort!(rowidx, currdata, currrows)
-            push!(newrows, currrows .- first(I) .+ 1)
-            push!(newdata, currdata)
+            append!(newrows, currrows .- convert(eltype(newrows), first(I)) .+ convert(eltype(newrows), 1))
+            append!(newdata, currdata)
         end
     end
     finalrows, finaldata =
