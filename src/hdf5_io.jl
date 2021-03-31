@@ -149,6 +149,16 @@ function write_impl(
     attributes(g)["_index"] = idxname
 end
 
+# see https://github.com/JuliaIO/HDF5.jl/issues/827
+# and https://github.com/JuliaIO/HDF5.jl/issues/826
+write_impl(
+    parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    data::Union{<:AbstractArray{Bool}, BitArray{1}};
+    extensible::Bool=false,
+    compress::UInt8=UInt8(9),
+) = write_impl(parent, name, Int8.(data), extensible=extensible, compress=compress)
+
 function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
@@ -169,18 +179,28 @@ function write_impl(
     write_impl_array(parent, name, data, dtype, dims, compress)
 end
 
-function write_impl_array(parent::Union{HDF5.File, HDF5.Group},
+function write_impl_array(
+    parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
-    data::AbstractArray{<:Number}, dtype::HDF5.Datatype, dims::Tuple{Vararg{<:Integer}}, compress::UInt8)
+    data::AbstractArray{<:Number},
+    dtype::HDF5.Datatype,
+    dims::Tuple{Vararg{<:Integer}},
+    compress::UInt8,
+)
     chunksize = HDF5.heuristic_chunk(data)
     d = create_dataset(parent, name, dtype, dims, chunk=chunksize, compress=compress)
     write_dataset(d, dtype, data)
 end
 
 # variable-length strings cannot be compressed in HDF5
-function write_impl_array(parent::Union{HDF5.File, HDF5.Group},
+function write_impl_array(
+    parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
-    data::AbstractArray{<:AbstractString}, dtype::HDF5.Datatype, dims::Tuple{Vararg{<:Integer}}, compress::UInt8)
+    data::AbstractArray{<:AbstractString},
+    dtype::HDF5.Datatype,
+    dims::Tuple{Vararg{<:Integer}},
+    compress::UInt8,
+)
     d = create_dataset(parent, name, dtype, dims)
     write_dataset(d, dtype, data)
 end

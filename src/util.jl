@@ -21,3 +21,24 @@ Base.getindex(adata::Union{AnnData, MuData}, i::Integer, J::Union{AbstractUnitRa
 Base.getindex(adata::Union{AnnData, MuData}, I::Union{AbstractUnitRange, Colon, Vector{<:Integer}}, j::Integer) =
     getindex(adata, I, j:j)
 Base.getindex(adata::Union{AnnData, MuData}, i::Integer, j::Integer) = getindex(adata, i:i, j:j)
+
+function find_unique_rownames_colname(mdata::MuData, property::Symbol)
+    colname = "___index___"
+    finished = false
+    it = Iterators.flatten(((mdata,), values(mdata.mod)))
+    while !finished
+        for ad in it
+            try
+                names(getproperty(ad, property), colname)
+                colname = "_" * colname
+                break
+             catch e
+                if !(e isa ArgumentError)
+                    rethrow(e)
+                end
+            end
+        end
+        finished = true
+    end
+    return colname
+end

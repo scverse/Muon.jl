@@ -2,12 +2,12 @@ mutable struct MuData
     file::Union{HDF5.File, Nothing}
     mod::Dict{String, AnnData}
 
-    obs::Union{DataFrame, Nothing}
+    obs::DataFrame
     obs_names::AbstractVector{<:AbstractString}
     obsm::StrAlignedMapping{Tuple{1 => 1}, MuData}
     obsp::StrAlignedMapping{Tuple{1 => 1, 2 => 1}, MuData}
 
-    var::Union{DataFrame, Nothing}
+    var::DataFrame
     var_names::AbstractVector{<:AbstractString}
     varm::StrAlignedMapping{Tuple{1 => 2}, MuData}
     varp::StrAlignedMapping{Tuple{1 => 2, 2 => 2}, MuData}
@@ -46,6 +46,9 @@ mutable struct MuData
         for modality in mods
             mdata.mod[modality] = AnnData(file["mod"][modality], backed)
         end
+
+        update_attr!(mdata, :var)
+        update_attr!(mdata, :obs)
         return mdata
     end
 
@@ -72,15 +75,18 @@ mutable struct MuData
         end
 
         # TODO: dimension checking. This needs merging dimensions of all the AnnDatas based on var_names/obs_names
-        mdata.obs = obs
+        mdata.obs = isnothing(obs) ? DataFrame() : obs
         mdata.obs_names = isnothing(obs_names) ? String[] : obs_names
-        mdata.var = var
+        mdata.var = isnothing(var) ? DataFrame() : var
         mdata.var_names = isnothing(var_names) ? String[] : var_names
 
         mdata.obsm = StrAlignedMapping{Tuple{1 => 1}}(mdata, obsm)
         mdata.varm = StrAlignedMapping{Tuple{1 => 2}}(mdata, varm)
         mdata.obsp = StrAlignedMapping{Tuple{1 => 1, 2 => 1}}(mdata, obsp)
         mdata.varp = StrAlignedMapping{Tuple{1 => 2, 2 => 2}}(mdata, varp)
+
+        update_attr!(mdata, :var)
+        update_attr!(mdata, :obs)
         return mdata
     end
 end
@@ -140,10 +146,10 @@ function Base.write(mudata::MuData)
 end
 
 function write_metadata(parent::Union{HDF5.File, HDF5.Group}, mudata::MuData)
-    write_attr(parent, "obs", mudata.obs_names, mudata.obs)
+    write_attr(parent, "obs", mudata.obs_names, shrink_attr(mudata, :obs))
     write_attr(parent, "obsm", mudata.obsm)
     write_attr(parent, "obsp", mudata.obsp)
-    write_attr(parent, "var", mudata.var_names, mudata.var)
+    write_attr(parent, "var", mudata.var_names, shrink_attr(mudata, :var))
     write_attr(parent, "varm", mudata.varm)
     write_attr(parent, "varp", mudata.varp)
 end
@@ -183,3 +189,82 @@ function Base.show(io::IO, ::MIME"text/plain", mdata::MuData)
 end
 
 isbacked(mdata::MuData) = mdata.file !== nothing
+
+function update_attr!(mdata::MuData, attr::Symbol)
+    globalcols = [
+        col for
+        col in names(getproperty(mdata, attr)) if !any(startswith.(col, keys(mdata.mod) .* ":"))
+    ]
+    globaldata = getproperty(mdata, attr)[!, globalcols]
+    namesattr = Symbol(string(attr) * "_names")
+    old_rownames = getproperty(mdata, namesattr)
+
+    idxcol = find_unique_rownames_colname(mdata, attr)
+
+    try
+        newdf = reduce((
+            mod => insertcols!(getproperty(ad, attr), idxcol => getproperty(ad, namesattr)) for
+            (mod, ad) in mdata.mod
+        )) do df1, df2
+            outerjoin(
+                df1.second,
+                df2.second,
+                on=idxcol,
+                renamecols=((x -> df1.first * ":" * x) => (x -> df2.first * ":" * x)),
+            )
+        end
+    finally
+        for ad in values(mdata.mod)
+            df = getproperty(ad, attr)
+            select!(df, 1:(ncol(df) - 1)) # delete the rownames column
+        end
+    end
+
+    newdf =
+        leftjoin(newdf, insertcols!(globaldata, idxcol => getproperty(mdata, namesattr)), on=idxcol)
+    rownames = newdf[!, idxcol]
+    try
+        rownames = convert(Vector{nonmissingtype(eltype(rownames))}, rownames)
+    catch e
+        if e isa MethodError
+            throw("New $(string(namesattr)) contain missing values. That should not happen, ever.")
+        else
+            rethrow(e)
+        end
+    end
+
+    select!(newdf, Not(idxcol))
+    setproperty!(mdata, attr, newdf)
+    setproperty!(mdata, namesattr, rownames)
+
+    mattr = Symbol(string(attr) * "m")
+    for (mod, ad) in mdata.mod
+        getproperty(mdata, mattr)[mod] = rownames .∈ (Set(getproperty(ad, namesattr)),)
+    end
+
+    keep_index = rownames .∈ (Set(old_rownames),)
+    if sum(keep_index) != length(old_rownames)
+        for (k, v) in getproperty(mdata, mattr)
+            if k ∉ keys(mdata.mod)
+                getproperty(mdata, mattr)[k] = v[keep_index, :]
+            end
+        end
+
+        pattr = Symbol(string(attr) * "p")
+        for (k, v) in getproperty(mdata, pattr)
+            if k ∉ keys(mdata.mod)
+                getproperty(mdata, pattr)[k] = v[keep_index, keep_index]
+            end
+        end
+    end
+
+    nothing
+end
+
+function shrink_attr(mdata::MuData, attr::Symbol)
+    globalcols = [
+        col for
+        col in names(getproperty(mdata, attr)) if !any(startswith.(col, keys(mdata.mod) .* ":"))
+    ]
+    return disallowmissing!(select(getproperty(mdata, attr), globalcols))
+end

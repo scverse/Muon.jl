@@ -3,10 +3,10 @@ mutable struct AnnData
 
     X::Union{AbstractMatrix{<:Number}, Nothing}
 
-    obs::Union{DataFrame, Nothing}
+    obs::DataFrame
     obs_names::AbstractVector{<:AbstractString}
 
-    var::Union{DataFrame, Nothing}
+    var::DataFrame
     var_names::AbstractVector{<:AbstractString}
 
     obsm::StrAlignedMapping{Tuple{1 => 1}, AnnData}
@@ -80,7 +80,9 @@ mutable struct AnnData
         layers::Union{AbstractDict{<:AbstractString, AbstractMatrix{<:Number}}, Nothing}=nothing,
     )
         m, n = size(X)
-        if !isnothing(obs) && size(obs, 1) != m
+        if isnothing(obs)
+            obs = DataFrame()
+        elseif size(obs, 1) != m
             throw(DimensionMismatch("X has $m rows, but obs has $(size(obs, 1)) rows"))
         end
 
@@ -90,7 +92,9 @@ mutable struct AnnData
             throw(DimensionMismatch("X has $m rows, but $(length(obs_names)) obs_names given"))
         end
 
-        if !isnothing(var) && size(var, 1) != n
+        if isnothing(var)
+            var = DataFrame()
+        elseif size(var, 1) != n
             throw(DimensionMismatch("X has $n columns, but var has $(size(var, 1)) rows"))
         end
 
