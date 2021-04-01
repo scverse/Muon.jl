@@ -164,12 +164,11 @@ function Base.getindex(
     I::Union{AbstractUnitRange, Colon, Vector{<:Integer}},
     J::Union{AbstractUnitRange, Colon, Vector{<:Integer}},
 )
-    # TODO: handle AnnDatas with non-overlapping / partially overlapping cell sets
     newmu = MuData(
-        mod=Dict{String, AnnData}(k => ad[I, J] for (k, ad) in mdata.mod),
-        obs=isnothing(mdata.obs) || nrow(mdata.obs) == 0 ? nothing : mdata.obs[I, :],
+        mod=Dict{String, AnnData}(k => ad[getadidx(I, mdata.obsm[k]), getadidx(J, mdata.varm[k])] for (k, ad) in mdata.mod),
+        obs=isempty(mdata.obs) ? nothing : mdata.obs[I, :],
         obs_names=mdata.obs_names[I],
-        var=isnothing(mdata.var) || nrow(mdata.var) == 0 ? nothing : mdata.var[J, :],
+        var=isempty(mdata.var) ? nothing : mdata.var[J, :],
         var_names=mdata.var_names[J],
     )
     copy_subset(mdata.obsm, newmu.obsm, I, J)
@@ -178,6 +177,29 @@ function Base.getindex(
     copy_subset(mdata.varp, newmu.varp, I, J)
     return newmu
 end
+
+getadidx(idx::Colon, ref::AbstractVector{Bool}) = idx
+function getadidx(idx::AbstractUnitRange, ref::AbstractVector{Bool})
+    allidx = findall(ref)
+    start = findfirst(x -> x ≥ first(idx), allidx)
+    stop = findlast(x -> x ≤ last(idx), allidx)
+    return start:stop
+end
+function getadidx(idx::AbstractVector{<:Integer}, ref::AbstractVector{Bool})
+    allidx = findall(ref)
+    revmapping = zeros(UInt32, length(ref))
+    @inbounds revmapping[allidx] .= 1:length(allidx)
+    i = 0
+    @inbounds for id in idx
+        if revmapping(id) > 0
+            i += 1
+            allidx[i] = revmapping[id]
+        end
+    end
+    resize!(allidx, i)
+    return allidx
+end
+
 
 function Base.show(io::IO, mdata::MuData)
     compact = get(io, :compact, false)
