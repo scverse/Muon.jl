@@ -53,7 +53,7 @@ mutable struct MuData
     end
 
     function MuData(;
-        mod::AbstractDict{<:AbstractString, AnnData}=nothing,
+        mod::Union{AbstractDict{<:AbstractString, AnnData}, Nothing}=nothing,
         obs::Union{DataFrame, Nothing}=nothing,
         obs_names::Union{AbstractVector{<:AbstractString}, Nothing}=nothing,
         var::Union{DataFrame, Nothing}=nothing,
@@ -164,6 +164,7 @@ function Base.getindex(
     I::Union{AbstractUnitRange, Colon, Vector{<:Integer}},
     J::Union{AbstractUnitRange, Colon, Vector{<:Integer}},
 )
+    @boundscheck checkbounds(mdata, I, J)
     newmu = MuData(
         mod=Dict{String, AnnData}(k => ad[getadidx(I, mdata.obsm[k]), getadidx(J, mdata.varm[k])] for (k, ad) in mdata.mod),
         obs=isempty(mdata.obs) ? nothing : mdata.obs[I, :],
@@ -180,10 +181,12 @@ end
 
 getadidx(idx::Colon, ref::AbstractVector{Bool}) = idx
 function getadidx(idx::AbstractUnitRange, ref::AbstractVector{Bool})
+    isempty(idx) && return 1:0
     allidx = findall(ref)
     start = findfirst(x -> x ≥ first(idx), allidx)
     stop = findlast(x -> x ≤ last(idx), allidx)
-    return start:stop
+
+    return start ≡ nothing || stop ≡ nothing ? (1:0) : (start:stop)
 end
 function getadidx(idx::AbstractVector{<:Integer}, ref::AbstractVector{Bool})
     allidx = findall(ref)
@@ -197,9 +200,8 @@ function getadidx(idx::AbstractVector{<:Integer}, ref::AbstractVector{Bool})
         end
     end
     resize!(allidx, i)
-    return allidx
+    return isempty(allidx) ? [] : allidx
 end
-
 
 function Base.show(io::IO, mdata::MuData)
     compact = get(io, :compact, false)
@@ -223,39 +225,43 @@ function update_attr!(mdata::MuData, attr::Symbol)
 
     idxcol = find_unique_rownames_colname(mdata, attr)
 
-    try
-        newdf = reduce((
-            mod => insertcols!(getproperty(ad, attr), idxcol => getproperty(ad, namesattr)) for
-            (mod, ad) in mdata.mod
-        )) do df1, df2
-            outerjoin(
-                df1.second,
-                df2.second,
-                on=idxcol,
-                renamecols=((x -> df1.first * ":" * x) => (x -> df2.first * ":" * x)),
-            )
+    if !isempty(mdata.mod)
+        try
+            newdf = reduce((
+                mod => insertcols!(getproperty(ad, attr), idxcol => getproperty(ad, namesattr)) for
+                (mod, ad) in mdata.mod
+            )) do df1, df2
+                outerjoin(
+                    df1.second,
+                    df2.second,
+                    on=idxcol,
+                    renamecols=((x -> df1.first * ":" * x) => (x -> df2.first * ":" * x)),
+                )
+            end
+        finally
+            for ad in values(mdata.mod)
+                df = getproperty(ad, attr)
+                select!(df, 1:(ncol(df) - 1)) # delete the rownames column
+            end
         end
-    finally
-        for ad in values(mdata.mod)
-            df = getproperty(ad, attr)
-            select!(df, 1:(ncol(df) - 1)) # delete the rownames column
+        newdf =
+            leftjoin(newdf, insertcols!(globaldata, idxcol => getproperty(mdata, namesattr)), on=idxcol)
+        rownames = newdf[!, idxcol]
+
+        try
+            rownames = convert(Vector{nonmissingtype(eltype(rownames))}, rownames)
+        catch e
+            if e isa MethodError
+                throw("New $(string(namesattr)) contain missing values. That should not happen, ever.")
+            else
+                rethrow(e)
+            end
         end
+    else
+        newdf = DataFrame()
+        rownames = Vector{String}()
     end
 
-    newdf =
-        leftjoin(newdf, insertcols!(globaldata, idxcol => getproperty(mdata, namesattr)), on=idxcol)
-    rownames = newdf[!, idxcol]
-    try
-        rownames = convert(Vector{nonmissingtype(eltype(rownames))}, rownames)
-    catch e
-        if e isa MethodError
-            throw("New $(string(namesattr)) contain missing values. That should not happen, ever.")
-        else
-            rethrow(e)
-        end
-    end
-
-    select!(newdf, Not(idxcol))
     setproperty!(mdata, attr, newdf)
     setproperty!(mdata, namesattr, rownames)
 
@@ -265,7 +271,7 @@ function update_attr!(mdata::MuData, attr::Symbol)
     end
 
     keep_index = rownames .∈ (Set(old_rownames),)
-    if sum(keep_index) != length(old_rownames)
+    @inbounds if sum(keep_index) != length(old_rownames)
         for (k, v) in getproperty(mdata, mattr)
             if k ∉ keys(mdata.mod)
                 getproperty(mdata, mattr)[k] = v[keep_index, :]

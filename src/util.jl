@@ -42,3 +42,24 @@ function find_unique_rownames_colname(mdata::MuData, property::Symbol)
     end
     return colname
 end
+
+Base.axes(A::Union{MuData, AnnData}) = map(n -> Base.OneTo(n), size(A))
+
+@inline function Base.checkbounds(::Type{Bool}, A::Union{MuData, AnnData}, I...)
+    Base.checkbounds_indices(Bool, axes(A), I)
+end
+
+@inline function Base.checkbounds(A::Union{MuData, AnnData}, I...)
+    checkbounds(Bool, A, I...) || throw(BoundsError(A, I))
+    nothing
+end
+
+function Base.summary(A::Union{MuData, AnnData})
+    s = size(A)
+    return "$(typeof(A)) with $(s[1]) observations and $(s[2]) variables"
+end
+
+Base.summary(io::IO, A::Union{MuData, AnnData}) = print(io, summary(A))
+
+Base.firstindex(A::Union{MuData, AnnData}, d::Integer) = 1
+Base.lastindex(A::Union{MuData, AnnData}, d::Integer) = size(A, d)

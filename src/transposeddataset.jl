@@ -45,7 +45,24 @@ function Base.getindex(dset::TransposedDataset, I::Vararg{<:Integer, N}) where N
     mat = getindex(dset.dset, reverse(I)...)
     return ndims(mat) == 1 ? mat : mat'
 end
-function Base.getindex(dset::TransposedDataset, I...)
+function Base.getindex(dset::TransposedDataset{T, N}, I...) where {T, N}
+    emptydims = Vector{UInt8}()
+    for (j, i) in enumerate(I)
+        try
+            if isempty(i)
+                push!(emptydims, j)
+            end
+        catch e
+            if !(e isa MethodError) # Colon doesn't support isempty
+                rethrow(e)
+            end
+        end
+    end
+    if !isempty(emptydims)
+        dims = collect(size(dset))
+        dims[emptydims] .= UInt8(0)
+        return Array{T, N}(undef, dims...)[I...]
+    end
     mat = getindex(dset.dset, reverse(I)...)
     return ndims(mat) == 1 ? mat : mat'
 end
