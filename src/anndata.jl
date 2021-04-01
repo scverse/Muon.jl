@@ -201,20 +201,42 @@ end
 
 function Base.getindex(
     adata::AnnData,
-    I::Union{AbstractUnitRange, Colon, Vector{<:Integer}},
-    J::Union{AbstractUnitRange, Colon, Vector{<:Integer}},
+    I::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}},
+    J::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}},
 )
+    i, j = convertidx(I, adata.obs_names), convertidx(J, adata.var_names)
     newad = AnnData(
-        X=adata.X[I, J],
-        obs=isnothing(adata.obs) ? nothing : adata.obs[I, :],
-        obs_names=adata.obs_names[I],
-        var=isnothing(adata.var) ? nothing : adata.var[J, :],
-        var_names=adata.var_names[J],
+        X=adata.X[i, j],
+        obs=isempty(adata.obs) ? nothing : adata.obs[i, :],
+        obs_names=adata.obs_names[i],
+        var=isempty(adata.var) ? nothing : adata.var[j, :],
+        var_names=adata.var_names[j],
     )
-    copy_subset(adata.obsm, newad.obsm, I, J)
-    copy_subset(adata.varm, newad.varm, I, J)
-    copy_subset(adata.obsp, newad.obsp, I, J)
-    copy_subset(adata.varp, newad.varp, I, J)
-    copy_subset(adata.layers, newad.layers, I, J)
+    copy_subset(adata.obsm, newad.obsm, i, j)
+    copy_subset(adata.varm, newad.varm, i, j)
+    copy_subset(adata.obsp, newad.obsp, i, j)
+    copy_subset(adata.varp, newad.varp, j, j)
+    copy_subset(adata.layers, newad.layers, i, j)
     return newad
+end
+
+@inline function convertidx(
+    idx::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}},
+    ref::AbstractVector{<:AbstractString},
+)
+    @boundscheck checkbounds(ref, idx)
+    return idx
+end
+
+function convertidx(idx::AbstractVector{<:AbstractString}, ref::AbstractVector{<:AbstractString})
+    numidx = Vector{UInt32}(undef, length(idx)) # switch to using OrderedSets, depends on https://github.com/JuliaCollections/OrderedCollections.jl/issues/64
+    @inbounds for (i, name) in enumerate(idx)
+        found = findfirst(x -> x == name, ref)
+        if isnothing(found)
+            throw(KeyError(name))
+        else
+            numidx[i] = found
+        end
+    end
+    return numidx
 end
