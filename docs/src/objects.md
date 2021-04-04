@@ -10,6 +10,16 @@ Originally, both [AnnData objects](https://github.com/theislab/anndata) and [MuD
 
 `AnnData` objects can be [stored in and read from](@ref io_anndata) `.h5ad` files.
 
+### Creating AnnData objects
+
+A simple 2D array is already enough to initialize an annotated data object:
+
+```julia
+x = [1:3  4:6];
+ad = AnnData(X=x)
+# AnnData object 3 ✕ 2
+```
+
 ## MuData
 
 The basic idea behind a multimodal object is _key &rarr; value_ relationship where _keys_ represent the unique names of individual modalities and _values_ are `AnnData` objects that contain the correposnding data. Similarly to `AnnData` objects, `MuData` objects can also contain rich multimodal annotations.

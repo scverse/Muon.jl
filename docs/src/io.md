@@ -17,7 +17,7 @@ To save the multimodal object on disk, there is [`writeh5mu`](@ref):
 writeh5mu("multimodal_dataset.h5mu", m)
 ```
 
-## .h5ad files I/O
+## [.h5ad files I/O](@id io_anndata)
 
 For serializing and deserializing AnnData objects, there are [`writeh5ad`](@ref) and [`readh5ad`](@ref):
 
