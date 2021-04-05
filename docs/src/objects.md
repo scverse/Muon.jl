@@ -14,12 +14,44 @@ Originally, both [AnnData objects](https://github.com/theislab/anndata) and [MuD
 
 A simple 2D array is already enough to initialize an annotated data object:
 
-```julia
-x = [1:3  4:6];
+```@example 1
+import Random # hide
+Random.seed!(1) # hide
+import Muon.AnnData # hide
+x = rand(10, 2) * rand(2, 5);
 ad = AnnData(X=x)
-# AnnData object 3 ✕ 2
+```
+
+Observations correpond to the rows of the matrix and have unique names:
+
+```@example 1
+ad.obs_names = "obs_" .* ad.obs_names
+```
+
+Corresponding arrays for the observations are stored in the `.obsm` slot:
+
+```@example 1
+import LinearAlgebra.svd, LinearAlgebra.Diagonal # hide
+f = svd(x);
+ad.obsm["X_svd"] = f.U * Diagonal(f.S);
+```
+
+When data is assigned, it is verified first that the dimensions match:
+
+```@example 1
+ad.obsm["X_Vt"] = f.Vt  # won't work
+# => DimensionMismatch
 ```
 
 ## MuData
 
-The basic idea behind a multimodal object is _key &rarr; value_ relationship where _keys_ represent the unique names of individual modalities and _values_ are `AnnData` objects that contain the correposnding data. Similarly to `AnnData` objects, `MuData` objects can also contain rich multimodal annotations.
+The basic idea behind a multimodal object is _key_ ``\rightarrow`` _value_ relationship where _keys_ represent the unique names of individual modalities and _values_ are `AnnData` objects that contain the correposnding data. Similarly to `AnnData` objects, `MuData` objects can also contain rich multimodal annotations.
+
+```@example 1
+import Distributions.Binomial # hide
+import Muon.MuData # hide
+ad2 = AnnData(X=rand(Binomial(1, 0.3), (10, 7)))
+
+md = MuData(mod=Dict("view_rand" => ad, "view_binom" => ad2))
+```
+

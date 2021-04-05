@@ -205,7 +205,12 @@ end
 
 function Base.show(io::IO, mdata::MuData)
     compact = get(io, :compact, false)
-    print(io, """MuData object $(size(mdata)[1]) \u2715 $(size(mdata)[2])""")
+    repr = """MuData object $(size(mdata)[1]) \u2715 $(size(mdata)[2])"""
+    for (name,adata) in mdata.mod
+        repr *= """\n\u2514 $(name)"""
+	repr *= """\n  AnnData object $(size(adata)[1]) \u2715 $(size(adata)[2])"""
+    end
+    print(io, repr)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", mdata::MuData)
