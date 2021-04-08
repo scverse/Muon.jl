@@ -10,6 +10,7 @@ using CategoricalArrays
 export readh5mu, readh5ad, writeh5mu, writeh5ad, isbacked
 export AnnData, MuData
 
+include("index.jl")
 include("sparsedataset.jl")
 include("transposeddataset.jl")
 include("hdf5_io.jl")
