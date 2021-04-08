@@ -9,7 +9,7 @@ mutable struct Index{T, V} <: AbstractVector{T}
     initiallongestprobe::V
     deletions::UInt16
 
-    function Index{T}(nelements::Integer) where T
+    function Index{T}(nelements::Integer) where {T}
         size = ceil(nelements / 0.9) # 0.9 load factor
 
         local mintype::Type
@@ -21,7 +21,14 @@ mutable struct Index{T, V} <: AbstractVector{T}
             end
         end
 
-        return new{T, mintype}(Vector{T}(undef, nelements), zeros(mintype, mintype(size)), zeros(mintype, mintype(size)), 0, 0, 0)
+        return new{T, mintype}(
+            Vector{T}(undef, nelements),
+            zeros(mintype, mintype(size)),
+            zeros(mintype, mintype(size)),
+            0,
+            0,
+            0,
+        )
     end
 end
 
@@ -46,15 +53,17 @@ function _setindex!(idx::Index{T, V}, elem::T, position::Unsigned) where {T, V}
     end
 
     # reset longestprobe after some deletions deletions, this should maintain stable performance for _getindex and _getindex_array
-    if idx.longestprobe == prevlongestprobe && idx.longestprobe > idx.initiallongestprobe && idx.deletions >= length(idx) ÷ 2
+    if idx.longestprobe == prevlongestprobe &&
+       idx.longestprobe > idx.initiallongestprobe &&
+       idx.deletions >= length(idx) ÷ 2
         idx.longestprobe = maximum(idx.probepositions)
         idx.deletions = 0x0
     end
 end
 
-function _getindex(idx::Index{T}, elem::T) where T
+function _getindex(idx::Index{T}, elem::T) where {T}
     location = hash(elem) % _length(idx) + 0x1
-    for probeposition in 0x1:idx.longestprobe
+    for probeposition in 0x1:(idx.longestprobe)
         pos = idx.indices[location]
         if pos > 0x0 && isequal(idx.vals[pos], elem)
             return location
@@ -72,7 +81,7 @@ end
 function _getindex_array(idx::Index{T, V}, elem::T) where {T, V}
     locations = Vector{V}()
     location = hash(elem) % _length(idx) + 0x1
-    for probeposition in 0x1:idx.longestprobe
+    for probeposition in 0x1:(idx.longestprobe)
         pos = idx.indices[location]
         if pos > 0x0 && isequal(idx.vals[pos], elem)
             push!(locations, location)
@@ -87,7 +96,7 @@ function _getindex_array(idx::Index{T, V}, elem::T) where {T, V}
     return locations
 end
 
-function _getindex_byposition(idx::Index{T}, i::Integer) where T
+function _getindex_byposition(idx::Index{T}, i::Integer) where {T}
     elem = idx.vals[i]
     location = hash(elem) % _length(idx) + 0x1
     while true
@@ -107,13 +116,16 @@ end
 function _delete!(idx::Index, oldkeyindex::Integer)
     lastidx = findnext(x -> x <= 0x1, idx.probepositions, oldkeyindex + 0x1)
     @inbounds if !isnothing(lastidx)
-        idx.indices[oldkeyindex:(lastidx - 0x2)] .= @view idx.indices[(oldkeyindex + 0x1):(lastidx - 0x1)]
-        idx.probepositions[oldkeyindex:(lastidx - 0x2)] .= @view(idx.probepositions[(oldkeyindex + 0x1):(lastidx - 0x1)]) .- 0x1
+        idx.indices[oldkeyindex:(lastidx - 0x2)] .=
+            @view idx.indices[(oldkeyindex + 0x1):(lastidx - 0x1)]
+        idx.probepositions[oldkeyindex:(lastidx - 0x2)] .=
+            @view(idx.probepositions[(oldkeyindex + 0x1):(lastidx - 0x1)]) .- 0x1
         idx.indices[lastidx - 0x1] = idx.probepositions[lastidx - 0x1] = 0x0
     else
         if oldkeyindex < _length(idx)
             idx.indices[oldkeyindex:(end - 0x1)] .= @view idx.indices[(oldkeyindex + 0x1):end]
-            idx.probepositions[oldkeyindex:(end - 0x1)] .= @view(idx.probepositions[(oldkeyindex + 0x1):end]) .- 0x1
+            idx.probepositions[oldkeyindex:(end - 0x1)] .=
+                @view(idx.probepositions[(oldkeyindex + 0x1):end]) .- 0x1
         end
         if idx.probepositions[1] > 0x1
             idx.indices[end] = idx.indices[1]
@@ -124,7 +136,8 @@ function _delete!(idx::Index, oldkeyindex::Integer)
                 lastidx = oldkeyindex
             end
             idx.indices[0x1:(lastidx - 0x2)] .= @view idx.indices[0x2:(lastidx - 0x1)]
-            idx.probepositions[0x1:(lastidx - 0x2)] .= @view(idx.probepositions[0x2:(lastidx - 0x1)]) .- 0x1
+            idx.probepositions[0x1:(lastidx - 0x2)] .=
+                @view(idx.probepositions[0x2:(lastidx - 0x1)]) .- 0x1
             idx.indices[lastidx - 0x1] = idx.probepositions[lastidx - 0x1] = 0x0
         else
             idx.indices[end] = idx.probepositions[end] = 0x0
@@ -134,7 +147,7 @@ function _delete!(idx::Index, oldkeyindex::Integer)
     idx.deletions += 0x1
 end
 
-function Index(elems::AbstractVector{T}) where T
+function Index(elems::AbstractVector{T}) where {T}
     idx = Index{T}(length(elems))
     for (i, e) in enumerate(elems)
         _setindex!(idx, e, UInt(i))
@@ -143,10 +156,10 @@ function Index(elems::AbstractVector{T}) where T
     return idx
 end
 
-Base.getindex(idx::Index{T}, elem::T) where T = getindex(idx, elem, Val(false))
-Base.getindex(idx::Index{T}, elem::T, x::Bool) where T = getindex(idx, elem, Val(x))
+Base.getindex(idx::Index{T}, elem::T) where {T} = getindex(idx, elem, Val(false))
+Base.getindex(idx::Index{T}, elem::T, x::Bool) where {T} = getindex(idx, elem, Val(x))
 
-function Base.getindex(idx::Index{T}, elem::T, ::Val{true}) where T
+function Base.getindex(idx::Index{T}, elem::T, ::Val{true}) where {T}
     d = _getindex_array(idx, elem)
     if length(d) == 0
         throw(KeyError(elem))
@@ -154,7 +167,7 @@ function Base.getindex(idx::Index{T}, elem::T, ::Val{true}) where T
     return idx.indices[d]
 end
 
-function Base.getindex(idx::Index{T}, elem::T, ::Val{false}) where T
+function Base.getindex(idx::Index{T}, elem::T, ::Val{false}) where {T}
     i = _getindex(idx, elem)
     if i == 0x0
         throw(KeyError(elem))
@@ -166,7 +179,7 @@ function Base.getindex(idx::Index, i::Integer)
     return idx.vals[i]
 end
 
-function Base.setindex!(idx::Index{T}, newval::T, i::Integer) where T
+function Base.setindex!(idx::Index{T}, newval::T, i::Integer) where {T}
     @boundscheck checkbounds(idx.vals, i)
     oldkeyindex = _getindex_byposition(idx, i)
     validx = idx.indices[oldkeyindex]
@@ -174,7 +187,7 @@ function Base.setindex!(idx::Index{T}, newval::T, i::Integer) where T
     _setindex!(idx, newval, validx)
 end
 
-function Base.setindex!(idx::Index{T}, newval::T, oldval::T) where T
+function Base.setindex!(idx::Index{T}, newval::T, oldval::T) where {T}
     oldkeyindex = _getindex(idx, oldval)
     if oldkeyindex == 0x0
         throw(KeyError(oldval))
@@ -184,7 +197,7 @@ function Base.setindex!(idx::Index{T}, newval::T, oldval::T) where T
     _setindex!(idx, newval, validx)
 end
 
-Base.in(elem::T, idx::Index{T}) where T = _getindex(idx, elem) != 0x0
+Base.in(elem::T, idx::Index{T}) where {T} = _getindex(idx, elem) != 0x0
 
 Base.length(idx::Index) = length(idx.vals)
 Base.size(idx::Index) = (length(idx),)
