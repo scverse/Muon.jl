@@ -63,7 +63,7 @@ end
 
 function _getindex(idx::Index{T}, elem::T) where {T}
     location = hash(elem) % _length(idx) + 0x1
-    for probeposition in 0x1:(idx.longestprobe)
+    for probeposition in 0x1:idx.longestprobe
         pos = idx.indices[location]
         if pos > 0x0 && isequal(idx.vals[pos], elem)
             return location
@@ -81,7 +81,7 @@ end
 function _getindex_array(idx::Index{T, V}, elem::T) where {T, V}
     locations = Vector{V}()
     location = hash(elem) % _length(idx) + 0x1
-    for probeposition in 0x1:(idx.longestprobe)
+    for probeposition in 0x1:idx.longestprobe
         pos = idx.indices[location]
         if pos > 0x0 && isequal(idx.vals[pos], elem)
             push!(locations, location)
@@ -99,18 +99,19 @@ end
 function _getindex_byposition(idx::Index{T}, i::Integer) where {T}
     elem = idx.vals[i]
     location = hash(elem) % _length(idx) + 0x1
-    while true
+    for probeposition in 0x1:idx.longestprobe
         pos = idx.indices[location]
         if pos > 0x0 && pos == i
             return location
         elseif pos == 0x0
-            return 0x0
+            break
         end
         location += 0x1
         if location > _length(idx)
             location = location % _length(idx)
         end
     end
+    throw(ErrorException("Element not found. This should never happen."))
 end
 
 function _delete!(idx::Index, oldkeyindex::Integer)
