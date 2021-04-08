@@ -63,7 +63,7 @@ end
 
 function _getindex(idx::Index{T}, elem::T) where {T}
     location = hash(elem) % _length(idx) + 0x1
-    for probeposition in 0x1:idx.longestprobe
+    for probeposition in 0x1:(idx.longestprobe)
         pos = idx.indices[location]
         if pos > 0x0 && isequal(idx.vals[pos], elem)
             return location
@@ -81,7 +81,7 @@ end
 function _getindex_array(idx::Index{T, V}, elem::T) where {T, V}
     locations = Vector{V}()
     location = hash(elem) % _length(idx) + 0x1
-    for probeposition in 0x1:idx.longestprobe
+    for probeposition in 0x1:(idx.longestprobe)
         pos = idx.indices[location]
         if pos > 0x0 && isequal(idx.vals[pos], elem)
             push!(locations, location)
@@ -99,7 +99,7 @@ end
 function _getindex_byposition(idx::Index{T}, i::Integer) where {T}
     elem = idx.vals[i]
     location = hash(elem) % _length(idx) + 0x1
-    for probeposition in 0x1:idx.longestprobe
+    for probeposition in 0x1:(idx.longestprobe)
         pos = idx.indices[location]
         if pos > 0x0 && pos == i
             return location
@@ -159,6 +159,9 @@ end
 
 Base.getindex(idx::Index{T}, elem::T) where {T} = getindex(idx, elem, Val(false))
 Base.getindex(idx::Index{T}, elem::T, x::Bool) where {T} = getindex(idx, elem, Val(x))
+Base.getindex(idx::Index{T}, elems::AbstractVector{T}) where {T} = getindex(idx, elems, Val(false))
+Base.getindex(idx::Index{T}, elems::AbstractVector{T}, x::Bool) where {T} =
+    getindex(idx, elems, Val(x))
 
 function Base.getindex(idx::Index{T}, elem::T, ::Val{true}) where {T}
     d = _getindex_array(idx, elem)
@@ -180,12 +183,16 @@ function Base.getindex(idx::Index, i::Integer)
     return idx.vals[i]
 end
 
+Base.getindex(idx::Index{T}, elems::AbstractVector{T}, x::Union{Val{true}, Val{false}}) where {T} =
+    reduce(vcat, (getindex(idx, elem, x) for elem in elems))
+
 function Base.setindex!(idx::Index{T}, newval::T, i::Integer) where {T}
     @boundscheck checkbounds(idx.vals, i)
     oldkeyindex = _getindex_byposition(idx, i)
     validx = idx.indices[oldkeyindex]
     _delete!(idx, oldkeyindex)
     _setindex!(idx, newval, validx)
+    return idx
 end
 
 function Base.setindex!(idx::Index{T}, newval::T, oldval::T) where {T}
@@ -196,6 +203,7 @@ function Base.setindex!(idx::Index{T}, newval::T, oldval::T) where {T}
     validx = idx.indices[oldkeyindex]
     _delete!(idx, oldkeyindex)
     _setindex!(idx, newval, validx)
+    return idx
 end
 
 Base.in(elem::T, idx::Index{T}) where {T} = _getindex(idx, elem) != 0x0

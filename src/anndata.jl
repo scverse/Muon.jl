@@ -4,10 +4,10 @@ mutable struct AnnData
     X::Union{AbstractMatrix{<:Number}, Nothing}
 
     obs::DataFrame
-    obs_names::AbstractVector{<:AbstractString}
+    obs_names::Index{<:AbstractString}
 
     var::DataFrame
-    var_names::AbstractVector{<:AbstractString}
+    var_names::Index{<:AbstractString}
 
     obsm::StrAlignedMapping{Tuple{1 => 1}, AnnData}
     obsp::StrAlignedMapping{Tuple{1 => 1, 2 => 1}, AnnData}
@@ -22,8 +22,10 @@ mutable struct AnnData
 
         # this needs to go first because it's used by size() and size()
         # is used for dimensionalty checks
-        adata.obs, adata.obs_names = read_dataframe(file["obs"])
-        adata.var, adata.var_names = read_dataframe(file["var"])
+        adata.obs, obs_names = read_dataframe(file["obs"])
+        adata.var, var_names = read_dataframe(file["var"])
+        adata.obs_names = Index(obs_names)
+        adata.var_names = Index(var_names)
 
         # observations
         adata.obsm = StrAlignedMapping{Tuple{1 => 1}}(
@@ -103,7 +105,7 @@ mutable struct AnnData
         elseif length(var_names) != n
             throw(DimensionMismatch("X has $n columns, but $(length(var_names)) var_names given"))
         end
-        adata = new(nothing, X, obs, obs_names, var, var_names)
+        adata = new(nothing, X, obs, Index(obs_names), var, Index(var_names))
         adata.obsm = StrAlignedMapping{Tuple{1 => 1}}(adata, obsm)
         adata.obsp = StrAlignedMapping{Tuple{1 => 1, 2 => 1}}(adata, obsp)
         adata.varm = StrAlignedMapping{Tuple{1 => 2}}(adata, varm)
@@ -201,10 +203,9 @@ end
 
 function Base.getindex(
     adata::AnnData,
-    I::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}},
-    J::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}},
+    I::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
+    J::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
 )
-    @boundscheck checkbounds(adata, I, J)
     i, j = convertidx(I, adata.obs_names), convertidx(J, adata.var_names)
     newad = AnnData(
         X=adata.X[i, j],
@@ -223,20 +224,13 @@ end
 
 @inline function convertidx(
     idx::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}},
-    ref::AbstractVector{<:AbstractString},
+    ref::Index{<:AbstractString},
 )
+    @boundscheck checkbounds(ref, idx)
     return idx
 end
-
-function convertidx(idx::AbstractVector{<:AbstractString}, ref::AbstractVector{<:AbstractString})
-    numidx = Vector{UInt32}(undef, length(idx)) # switch to using OrderedSets, depends on https://github.com/JuliaCollections/OrderedCollections.jl/issues/64
-    @inbounds for (i, name) in enumerate(idx)
-        found = findfirst(x -> x == name, ref)
-        if isnothing(found)
-            throw(KeyError(name))
-        else
-            numidx[i] = found
-        end
-    end
-    return numidx
+@inline function convertidx(idx::Number, ref::Index{<:AbstractString})
+    @boundscheck checkbounds(ref, idx)
+    return [idx]
 end
+@inline convertidx(idx::Union{AbstractString, AbstractVector{<:AbstractString}}, ref::Index{<:AbstractString}) = ref[idx, true]
