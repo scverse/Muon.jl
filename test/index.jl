@@ -1,17 +1,17 @@
 using Random
 Random.seed!(42)
-size = rand(100:200)
+_size = rand(100:200)
 
-function make_testvalues(size::Integer)
-    testvalues = Vector{String}(undef, size)
-    for i in 1:size
+function make_testvalues(_size::Integer)
+    testvalues = Vector{String}(undef, _size)
+    for i in 1:_size
         length = rand(50:200)
         testvalues[i] = randstring(length)
     end
     return testvalues
 end
 
-testvalues = make_testvalues(size)
+testvalues = make_testvalues(_size)
 idx = Muon.Index(testvalues)
 @testset "integer indexing" begin
     @testset "element: $i" for (i, v) in enumerate(testvalues)
@@ -25,7 +25,7 @@ end
     end
 end
 
-testvalues2 = make_testvalues(size)
+testvalues2 = make_testvalues(_size)
 testvalues3 = copy(testvalues)
 @testset "value replacement" begin
     @testset "element: $i" for (i, v) in enumerate(testvalues)
