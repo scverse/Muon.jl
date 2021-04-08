@@ -49,3 +49,14 @@ end
     end
     @test "test" ∉ idx
 end
+
+@testset "duplicates" begin
+    idx = Muon.Index(["test1", "test2", "test3", "test4", "test1", "test6"])
+    @test idx["test1"] ∈ (1, 5)
+    @test sort(idx["test1", true]) == [1, 5]
+    idx[5] = "test5"
+    @test idx[1] == "test1"
+    @test idx[5] == "test5"
+    idx[5] = "test2"
+    @test idx[5] == "test2"
+end
