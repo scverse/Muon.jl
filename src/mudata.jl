@@ -246,26 +246,27 @@ function update_attr!(mdata::MuData, attr::Symbol)
     idxcol, rowcol = find_unique_colnames(mdata, attr, 2)
 
     if !isempty(mdata.mod)
-        try
-            newdf = reduce((
-                mod => insertcols!(
-                    getproperty(ad, attr),
-                    idxcol => getproperty(ad, namesattr),
-                    rowcol => 1:nrow(getproperty(ad, attr)),
-                ) for (mod, ad) in mdata.mod
-            )) do df1, df2
-                outerjoin(
-                    df1.second,
-                    df2.second,
-                    on=idxcol,
-                    renamecols=((x -> df1.first * ":" * x) => (x -> df2.first * ":" * x)),
-                )
-            end
-        finally
-            for ad in values(mdata.mod)
-                df = getproperty(ad, attr)
-                select!(df, 1:(ncol(df) - 1)) # delete the rownames column
-            end
+        if length(mdata.mod) > 1
+            newdf = outerjoin(
+                (
+                    insertcols!(
+                        rename!(
+                            x -> mod * ":" * x,
+                            select(getproperty(ad, attr), :, copycols=false),
+                        ),
+                        idxcol => getproperty(ad, namesattr),
+                        mod * ":" * rowcol => 1:length(getproperty(ad, namesattr)),
+                    ) for (mod, ad) in mdata.mod
+                )...,
+                on=idxcol,
+            )
+        elseif length(mdata.mod) == 1
+            mod, ad = iterate(mdata.mod)[1]
+            newdf = insertcols!(
+                rename!(x -> mod * ":" * x, select(getproperty(ad, attr), :, copycols=false)),
+                idxcol => getproperty(ad, namesattr),
+                mod * ":" * rowcol => 1:length(getproperty(ad, namesattr)),
+            )
         end
         newdf = leftjoin(
             newdf,
@@ -273,6 +274,7 @@ function update_attr!(mdata::MuData, attr::Symbol)
             on=idxcol,
         )
         rownames = newdf[!, idxcol]
+        select!(newdf, Not(idxcol))
 
         try
             rownames = convert(Vector{nonmissingtype(eltype(rownames))}, rownames)
