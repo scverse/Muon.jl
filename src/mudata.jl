@@ -167,7 +167,12 @@ function Base.getindex(
 )
     @boundscheck checkbounds(mdata, I, J)
     newmu = MuData(
-        mod=Dict{String, AnnData}(k => ad[getadidx(I, mdata.obsm[k], mdata.obs_names, ad.obs_names), getadidx(J, mdata.varm[k], mdata.var_names, ad.var_names)] for (k, ad) in mdata.mod),
+        mod=Dict{String, AnnData}(
+            k => ad[
+                getadidx(I, mdata.obsm[k], mdata.obs_names, ad.obs_names),
+                getadidx(J, mdata.varm[k], mdata.var_names, ad.var_names),
+            ] for (k, ad) in mdata.mod
+        ),
         obs=isempty(mdata.obs) ? nothing : mdata.obs[I, :],
         obs_names=mdata.obs_names[I],
         var=isempty(mdata.var) ? nothing : mdata.var[J, :],
@@ -180,30 +185,45 @@ function Base.getindex(
     return newmu
 end
 
-getadidx(I::Colon, ref::AbstractVector{Bool}, idx::Index{<:AbstractString}, adidx::Index{<:AbstractString}) = I
-function getadidx(I::AbstractUnitRange, ref::AbstractVector{Bool}, idx::Index{<:AbstractString}, adidx::Index{<:AbstractString})
+getadidx(
+    I::Colon,
+    ref::AbstractVector{Bool},
+    idx::Index{<:AbstractString},
+    adidx::Index{<:AbstractString},
+) = I
+function getadidx(
+    I::AbstractUnitRange,
+    ref::AbstractVector{Bool},
+    idx::Index{<:AbstractString},
+    adidx::Index{<:AbstractString},
+)
     isempty(I) && return 1:0
     allstart, allstop = adidx[idx[first(I)], true, false], adidx[idx[last(I)], true, false]
     @inbounds if length(allstart) == 1 && length(allstop) == 1
         return allstart[1]:allstop[1]
     elseif length(allstart) == 1
         stop = findlast(@view ref[I])
-        return isnothing(stop) ? (1:0) : allstart[1]:(sum(@view ref[1:first(I) - 1]) + stop)
+        return isnothing(stop) ? (1:0) : allstart[1]:(sum(@view ref[1:(first(I) - 1)]) + stop)
     elseif length(allstop) == 1
         start = findfirst(@view ref[I])
-        return isnothing(start) ? (1:0) : (sum(@view ref[1:first(I) - 1]) + start):allstop[1]
+        return isnothing(start) ? (1:0) : (sum(@view ref[1:(first(I) - 1)]) + start):allstop[1]
     else
         start = findfirst(@view ref[I])
         stop = findlast(@view ref[I])
         if isnothing(start) || isnothing(stop)
             return 1:0
         else
-            offset = sum(@view ref[1:first(I) - 1])
+            offset = sum(@view ref[1:(first(I) - 1)])
             return (offset + start):(offset + stop)
         end
     end
 end
-function getadidx(I::AbstractVector{<:Integer}, ref::AbstractVector{Bool}, idx::Index{<:AbstractString}, adidx::Index{<:AbstractString, V}) where V
+function getadidx(
+    I::AbstractVector{<:Integer},
+    ref::AbstractVector{Bool},
+    idx::Index{<:AbstractString},
+    adidx::Index{<:AbstractString, V},
+) where {V}
     adindices = Vector{V}()
     nonunique = Vector{Int}()
     @inbounds for (j, i) in enumerate(I)
@@ -211,8 +231,8 @@ function getadidx(I::AbstractVector{<:Integer}, ref::AbstractVector{Bool}, idx::
         if length(cadindex) == 1
             push!(adindices, cadindex[1])
         elseif length(cadindex) > 1
-           push!(adindices, 0)
-           push!(nonunique, j)
+            push!(adindices, 0)
+            push!(nonunique, j)
         end
     end
     @inbounds if length(nonunique) > 0
@@ -231,9 +251,9 @@ end
 function Base.show(io::IO, mdata::MuData)
     compact = get(io, :compact, false)
     repr = """MuData object $(size(mdata)[1]) \u2715 $(size(mdata)[2])"""
-    for (name,adata) in mdata.mod
+    for (name, adata) in mdata.mod
         repr *= """\n\u2514 $(name)"""
-	repr *= """\n  AnnData object $(size(adata)[1]) \u2715 $(size(adata)[2])"""
+        repr *= """\n  AnnData object $(size(adata)[1]) \u2715 $(size(adata)[2])"""
     end
     print(io, repr)
 end
@@ -258,8 +278,8 @@ function update_attr!(mdata::MuData, attr::Symbol)
     if !isempty(mdata.mod)
         try
             newdf = reduce((
-                mod => insertcols!(getproperty(ad, attr), idxcol => getproperty(ad, namesattr)) for
-                (mod, ad) in mdata.mod
+                mod => insertcols!(getproperty(ad, attr), idxcol => getproperty(ad, namesattr))
+                for (mod, ad) in mdata.mod
             )) do df1, df2
                 outerjoin(
                     df1.second,
@@ -274,15 +294,20 @@ function update_attr!(mdata::MuData, attr::Symbol)
                 select!(df, 1:(ncol(df) - 1)) # delete the rownames column
             end
         end
-        newdf =
-            leftjoin(newdf, insertcols!(globaldata, idxcol => getproperty(mdata, namesattr)), on=idxcol)
+        newdf = leftjoin(
+            newdf,
+            insertcols!(globaldata, idxcol => getproperty(mdata, namesattr)),
+            on=idxcol,
+        )
         rownames = newdf[!, idxcol]
 
         try
             rownames = convert(Vector{nonmissingtype(eltype(rownames))}, rownames)
         catch e
             if e isa MethodError
-                throw("New $(string(namesattr)) contain missing values. That should not happen, ever.")
+                throw(
+                    "New $(string(namesattr)) contain missing values. That should not happen, ever.",
+                )
             else
                 rethrow(e)
             end
