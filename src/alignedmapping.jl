@@ -1,9 +1,19 @@
 abstract type AbstractAlignedMapping{T <: Tuple, K, V} <: AbstractDict{K, V} end
 
-struct AlignedMapping{T <: Tuple, K, R} <:
-       AbstractAlignedMapping{T, K, Union{AbstractArray{<:Number}, DataFrame}}
+struct AlignedMapping{T <: Tuple, K, R} <: AbstractAlignedMapping{
+    T,
+    K,
+    Union{AbstractArray{<:Number}, AbstractArray{Union{Missing, T}} where T <: Number, DataFrame},
+}
     ref::R # any type as long as it supports size()
-    d::Dict{K, Union{AbstractArray{<:Number}, DataFrame}}
+    d::Dict{
+        K,
+        Union{
+            AbstractArray{<:Number},
+            AbstractArray{Union{Missing, T}} where T <: Number,
+            DataFrame,
+        },
+    }
 
     function AlignedMapping{T, K}(r, d::AbstractDict{K}) where {T <: Tuple, K}
         for (k, v) in d

@@ -187,66 +187,16 @@ end
 
 getadidx(
     I::Colon,
-    ref::AbstractVector{Bool},
+    ref::AbstractVector{<:Unsigned},
     idx::Index{<:AbstractString},
     adidx::Index{<:AbstractString},
 ) = I
-function getadidx(
-    I::AbstractUnitRange,
-    ref::AbstractVector{Bool},
+getadidx(
+    I::Union{AbstractVector{<:Integer}, AbstractUnitRange},
+    ref::AbstractVector{<:Unsigned},
     idx::Index{<:AbstractString},
     adidx::Index{<:AbstractString},
-)
-    isempty(I) && return 1:0
-    allstart, allstop = adidx[idx[first(I)], true, false], adidx[idx[last(I)], true, false]
-    @inbounds if length(allstart) == 1 && length(allstop) == 1
-        return allstart[1]:allstop[1]
-    elseif length(allstart) == 1
-        stop = findlast(@view ref[I])
-        return isnothing(stop) ? (1:0) : allstart[1]:(sum(@view ref[1:(first(I) - 1)]) + stop)
-    elseif length(allstop) == 1
-        start = findfirst(@view ref[I])
-        return isnothing(start) ? (1:0) : (sum(@view ref[1:(first(I) - 1)]) + start):allstop[1]
-    else
-        start = findfirst(@view ref[I])
-        stop = findlast(@view ref[I])
-        if isnothing(start) || isnothing(stop)
-            return 1:0
-        else
-            offset = sum(@view ref[1:(first(I) - 1)])
-            return (offset + start):(offset + stop)
-        end
-    end
-end
-function getadidx(
-    I::AbstractVector{<:Integer},
-    ref::AbstractVector{Bool},
-    idx::Index{<:AbstractString},
-    adidx::Index{<:AbstractString, V},
-) where {V}
-    adindices = Vector{V}()
-    nonunique = Vector{Int}()
-    @inbounds for (j, i) in enumerate(I)
-        cadindex = adidx[idx[i], true, false]
-        if length(cadindex) == 1
-            push!(adindices, cadindex[1])
-        elseif length(cadindex) > 1
-            push!(adindices, 0)
-            push!(nonunique, j)
-        end
-    end
-    @inbounds if length(nonunique) > 0
-        allidx = findall(ref)
-        revmapping = zeros(eltype(allidx), length(ref))
-        revmapping[allidx] .= 1:length(allidx)
-        for id in nonunique
-            if revmapping[I[id]] > 0
-                adindices[id] = revmapping[I[id]]
-            end
-        end
-    end
-    return adindices
-end
+) = filter(x -> x > 0x0, ref[I])
 
 function Base.show(io::IO, mdata::MuData)
     compact = get(io, :compact, false)
@@ -273,12 +223,12 @@ function update_attr!(mdata::MuData, attr::Symbol)
     namesattr = Symbol(string(attr) * "_names")
     old_rownames = getproperty(mdata, namesattr)
 
-    idxcol = find_unique_rownames_colname(mdata, attr)
+    idxcol, rowcol = find_unique_colnames(mdata, attr, 2)
 
     if !isempty(mdata.mod)
         try
             newdf = reduce((
-                mod => insertcols!(getproperty(ad, attr), idxcol => getproperty(ad, namesattr))
+                mod => insertcols!(getproperty(ad, attr), idxcol => getproperty(ad, namesattr), rowcol => 1:nrow(getproperty(ad, attr)))
                 for (mod, ad) in mdata.mod
             )) do df1, df2
                 outerjoin(
@@ -322,10 +272,14 @@ function update_attr!(mdata::MuData, attr::Symbol)
 
     mattr = Symbol(string(attr) * "m")
     for (mod, ad) in mdata.mod
-        getproperty(mdata, mattr)[mod] = rownames .∈ (getproperty(ad, namesattr),)
+        colname = mod * ":" * rowcol
+        adindices = newdf[!, colname]
+        select!(newdf, Not(colname))
+        replace!(adindices, missing => 0)
+        getproperty(mdata, mattr)[mod] = convert(Vector{minimum_unsigned_type_for_n(maximum(adindices))}, adindices)
     end
 
-    keep_index = rownames .∈ (Set(old_rownames),)
+    keep_index = rownames .∈ (old_rownames,)
     @inbounds if sum(keep_index) != length(old_rownames)
         for (k, v) in getproperty(mdata, mattr)
             if k ∉ keys(mdata.mod)

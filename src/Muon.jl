@@ -1,5 +1,6 @@
 module Muon
 
+using Random
 using SparseArrays
 import LinearAlgebra: Adjoint
 
