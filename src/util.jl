@@ -62,11 +62,9 @@ end
     idx::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}},
     ref::Index{<:AbstractString},
 )
-    @boundscheck checkbounds(ref, idx)
     return idx
 end
 @inline function convertidx(idx::Number, ref::Index{<:AbstractString})
-    @boundscheck checkbounds(ref, idx)
     return idx:idx
 end
 @inline convertidx(

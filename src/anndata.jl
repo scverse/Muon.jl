@@ -206,6 +206,12 @@ function Base.getindex(
     I::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Integer, AbstractString},
     J::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Integer, AbstractString},
 )
+    @boundscheck begin
+        i = I isa AbstractString || I isa AbstractVector{<:AbstractString} ? (:) : I
+        j = J isa AbstractString || J isa AbstractVector{<:AbstractString} ? (:) : J
+        checkbounds(adata, i, j)
+    end
+
     i, j = convertidx(I, adata.obs_names), convertidx(J, adata.var_names)
     newad = AnnData(
         X=adata.X[i, j],
