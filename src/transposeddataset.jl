@@ -31,6 +31,8 @@ HDF5.copy_object(
 ) = copy_object(src_obj.dset, dst_parent, dst_path)
 HDF5.isvalid(dset::TransposedDataset) = isvalid(dset.dset)
 
+Base.to_index(A::HDF5.Dataset, I::AbstractUnitRange{<:Unsigned}) =
+    Base.to_index(A, UnitRange{Int}(I)) # hyperslab only supports Int indexes
 Base.ndims(dset::TransposedDataset) = ndims(dset.dset)
 Base.size(dset::TransposedDataset) = reverse(size(dset.dset))
 Base.size(dset::TransposedDataset, d::Integer) = size(dset.dset)[ndims(dset.dset) - d + 1]
@@ -41,7 +43,7 @@ HDF5.datatype(dset::TransposedDataset) = datatype(dset.dset)
 Base.read(dset::TransposedDataset) = read_matrix(dset.dset)
 
 Base.getindex(dset::TransposedDataset, i::Integer) = getindex(dset.dset, ndims(dset.dset) - d + 1)
-function Base.getindex(dset::TransposedDataset, I::Vararg{<:Integer, N}) where N
+function Base.getindex(dset::TransposedDataset, I::Vararg{<:Integer, N}) where {N}
     mat = getindex(dset.dset, reverse(I)...)
     return ndims(mat) == 1 ? mat : mat'
 end
@@ -61,13 +63,14 @@ function Base.getindex(dset::TransposedDataset{T, N}, I...) where {T, N}
     if !isempty(emptydims)
         dims = collect(size(dset))
         dims[emptydims] .= UInt8(0)
-        return Array{T, N}(undef, dims...)[I...]
+        @inbounds return Array{T, N}(undef, dims...)[I...]
     end
     mat = getindex(dset.dset, reverse(I)...)
     return ndims(mat) == 1 ? mat : mat'
 end
-Base.setindex!(dset::TransposedDataset, v, i::Int) = setindex!(dset.dset, v, ndims(dset.dset) - d + 1)
-function Base.setindex!(dset::TransposedDataset, v, I::Vararg{Int, N}) where N
+Base.setindex!(dset::TransposedDataset, v, i::Int) =
+    setindex!(dset.dset, v, ndims(dset.dset) - d + 1)
+function Base.setindex!(dset::TransposedDataset, v, I::Vararg{Int, N}) where {N}
     if ndims(v) > 1
         v = copy(v')
     end
@@ -84,7 +87,16 @@ Base.eachindex(dset::TransposedDataset) = CartesianIndices(size(dset))
 
 function Base.show(io::IO, dset::TransposedDataset)
     if isvalid(dset)
-        print(io, "Transposed HDF5 dataset: ", HDF5.name(dset.dset), " (file: ", dset.file.filename, " xfer_mode: ", dset.xfer.id, ")")
+        print(
+            io,
+            "Transposed HDF5 dataset: ",
+            HDF5.name(dset.dset),
+            " (file: ",
+            dset.file.filename,
+            " xfer_mode: ",
+            dset.xfer.id,
+            ")",
+        )
     else
         print(io, "Transposed HDF5 datset: (invalid)")
     end

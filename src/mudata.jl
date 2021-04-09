@@ -3,12 +3,12 @@ mutable struct MuData
     mod::Dict{String, AnnData}
 
     obs::DataFrame
-    obs_names::AbstractVector{<:AbstractString}
+    obs_names::Index{<:AbstractString}
     obsm::StrAlignedMapping{Tuple{1 => 1}, MuData}
     obsp::StrAlignedMapping{Tuple{1 => 1, 2 => 1}, MuData}
 
     var::DataFrame
-    var_names::AbstractVector{<:AbstractString}
+    var_names::Index{<:AbstractString}
     varm::StrAlignedMapping{Tuple{1 => 2}, MuData}
     varp::StrAlignedMapping{Tuple{1 => 2, 2 => 2}, MuData}
 
@@ -17,8 +17,9 @@ mutable struct MuData
 
         # this needs to go first because it's used by size() and size()
         # is used for dimensionalty checks
-        mdata.obs, mdata.obs_names = read_dataframe(file["obs"])
-        mdata.var, mdata.var_names = read_dataframe(file["var"])
+        mdata.obs, obs_names = read_dataframe(file["obs"])
+        mdata.var, var_names = read_dataframe(file["var"])
+        mdata.obs_names, mdata.var_names = Index(obs_names), Index(var_names)
 
         # Observations
         mdata.obsm = StrAlignedMapping{Tuple{1 => 1}}(
@@ -76,9 +77,9 @@ mutable struct MuData
 
         # TODO: dimension checking. This needs merging dimensions of all the AnnDatas based on var_names/obs_names
         mdata.obs = isnothing(obs) ? DataFrame() : obs
-        mdata.obs_names = isnothing(obs_names) ? String[] : obs_names
+        mdata.obs_names = isnothing(obs_names) ? Index(String[]) : Index(obs_names)
         mdata.var = isnothing(var) ? DataFrame() : var
-        mdata.var_names = isnothing(var_names) ? String[] : var_names
+        mdata.var_names = isnothing(var_names) ? Index(String[]) : Index(var_names)
 
         mdata.obsm = StrAlignedMapping{Tuple{1 => 1}}(mdata, obsm)
         mdata.varm = StrAlignedMapping{Tuple{1 => 2}}(mdata, varm)
@@ -166,7 +167,7 @@ function Base.getindex(
 )
     @boundscheck checkbounds(mdata, I, J)
     newmu = MuData(
-        mod=Dict{String, AnnData}(k => ad[getadidx(I, mdata.obsm[k]), getadidx(J, mdata.varm[k])] for (k, ad) in mdata.mod),
+        mod=Dict{String, AnnData}(k => ad[getadidx(I, mdata.obsm[k], mdata.obs_names, ad.obs_names), getadidx(J, mdata.varm[k], mdata.var_names, ad.var_names)] for (k, ad) in mdata.mod),
         obs=isempty(mdata.obs) ? nothing : mdata.obs[I, :],
         obs_names=mdata.obs_names[I],
         var=isempty(mdata.var) ? nothing : mdata.var[J, :],
@@ -179,28 +180,52 @@ function Base.getindex(
     return newmu
 end
 
-getadidx(idx::Colon, ref::AbstractVector{Bool}) = idx
-function getadidx(idx::AbstractUnitRange, ref::AbstractVector{Bool})
-    isempty(idx) && return 1:0
-    allidx = findall(ref)
-    start = findfirst(x -> x ≥ first(idx), allidx)
-    stop = findlast(x -> x ≤ last(idx), allidx)
-
-    return start ≡ nothing || stop ≡ nothing ? (1:0) : (start:stop)
-end
-function getadidx(idx::AbstractVector{<:Integer}, ref::AbstractVector{Bool})
-    allidx = findall(ref)
-    revmapping = zeros(UInt32, length(ref))
-    @inbounds revmapping[allidx] .= 1:length(allidx)
-    i = 0
-    @inbounds for id in idx
-        if revmapping(id) > 0
-            i += 1
-            allidx[i] = revmapping[id]
+getadidx(I::Colon, ref::AbstractVector{Bool}, idx::Index{<:AbstractString}, adidx::Index{<:AbstractString}) = I
+function getadidx(I::AbstractUnitRange, ref::AbstractVector{Bool}, idx::Index{<:AbstractString}, adidx::Index{<:AbstractString})
+    isempty(I) && return 1:0
+    allstart, allstop = adidx[idx[first(I)], true, false], adidx[idx[last(I)], true, false]
+    @inbounds if length(allstart) == 1 && length(allstop) == 1
+        return allstart[1]:allstop[1]
+    elseif length(allstart) == 1
+        stop = findlast(@view ref[I])
+        return isnothing(stop) ? (1:0) : allstart[1]:(sum(@view ref[1:first(I) - 1]) + stop)
+    elseif length(allstop) == 1
+        start = findfirst(@view ref[I])
+        return isnothing(start) ? (1:0) : (sum(@view ref[1:first(I) - 1]) + start):allstop[1]
+    else
+        start = findfirst(@view ref[I])
+        stop = findlast(@view ref[I])
+        if isnothing(start) || isnothing(stop)
+            return 1:0
+        else
+            offset = sum(@view ref[1:first(I) - 1])
+            return (offset + start):(offset + stop)
         end
     end
-    resize!(allidx, i)
-    return isempty(allidx) ? [] : allidx
+end
+function getadidx(I::AbstractVector{<:Integer}, ref::AbstractVector{Bool}, idx::Index{<:AbstractString}, adidx::Index{<:AbstractString, V}) where V
+    adindices = Vector{V}()
+    nonunique = Vector{Int}()
+    @inbounds for (j, i) in enumerate(I)
+        cadindex = adidx[idx[i], true, false]
+        if length(cadindex) == 1
+            push!(adindices, cadindex[1])
+        elseif length(cadindex) > 1
+           push!(adindices, 0)
+           push!(nonunique, j)
+        end
+    end
+    @inbounds if length(nonunique) > 0
+        allidx = findall(ref)
+        revmapping = zeros(eltype(allidx), length(ref))
+        revmapping[allidx] .= 1:length(allidx)
+        for id in nonunique
+            if revmapping[I[id]] > 0
+                adindices[id] = revmapping[I[id]]
+            end
+        end
+    end
+    return adindices
 end
 
 function Base.show(io::IO, mdata::MuData)
@@ -268,11 +293,11 @@ function update_attr!(mdata::MuData, attr::Symbol)
     end
 
     setproperty!(mdata, attr, newdf)
-    setproperty!(mdata, namesattr, rownames)
+    setproperty!(mdata, namesattr, Index(rownames))
 
     mattr = Symbol(string(attr) * "m")
     for (mod, ad) in mdata.mod
-        getproperty(mdata, mattr)[mod] = rownames .∈ (Set(getproperty(ad, namesattr)),)
+        getproperty(mdata, mattr)[mod] = rownames .∈ (getproperty(ad, namesattr),)
     end
 
     keep_index = rownames .∈ (Set(old_rownames),)
