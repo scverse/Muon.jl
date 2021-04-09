@@ -35,7 +35,7 @@ Base.to_index(A::HDF5.Dataset, I::AbstractUnitRange{<:Unsigned}) =
     Base.to_index(A, UnitRange{Int}(I)) # hyperslab only supports Int indexes
 Base.ndims(dset::TransposedDataset) = ndims(dset.dset)
 Base.size(dset::TransposedDataset) = reverse(size(dset.dset))
-Base.size(dset::TransposedDataset, d::Integer) = size(dset.dset)[ndims(dset.dset) - d + 1]
+Base.size(dset::TransposedDataset, d::Integer) = size(dset.dset, ndims(dset.dset) - d + 1)
 
 Base.lastindex(dset::TransposedDataset) = length(dset)
 Base.lastindex(dset::TransposedDataset, d::Int) = size(dset, d)
@@ -48,16 +48,11 @@ function Base.getindex(dset::TransposedDataset, I::Vararg{<:Integer, N}) where {
     return ndims(mat) == 1 ? mat : mat'
 end
 function Base.getindex(dset::TransposedDataset{T, N}, I...) where {T, N}
+    @boundscheck checkbounds(dset, I...)
     emptydims = Vector{UInt8}()
     for (j, i) in enumerate(I)
-        try
-            if isempty(i)
-                push!(emptydims, j)
-            end
-        catch e
-            if !(e isa MethodError) # Colon doesn't support isempty
-                rethrow(e)
-            end
+        if !(i isa Colon) && isempty(i) # Colon doesn't support isempty
+            push!(emptydims, j)
         end
     end
     if !isempty(emptydims)
@@ -65,8 +60,42 @@ function Base.getindex(dset::TransposedDataset{T, N}, I...) where {T, N}
         dims[emptydims] .= UInt8(0)
         @inbounds return Array{T, N}(undef, dims...)[I...]
     end
-    mat = getindex(dset.dset, reverse(I)...)
-    return ndims(mat) == 1 ? mat : mat'
+
+    # HDF5.Dataset doesn't support indexing with integer arrays
+    vectordims = findall(x -> !(x isa AbstractRange) && x isa AbstractVector{<:Integer}, I)
+    @inbounds if length(vectordims) > 0
+        dims = Vector{Int}(undef, length(I))
+        for (i, j) in enumerate(I)
+            dims[i] = (j isa Colon) ? size(dset, i) : length(j) # Colon doesn't support length
+        end
+        _ndims = length(dims)
+        mat = Array{T, N}(undef, dims...)
+        outidx = Vector{Union{Colon, Int}}(undef, _ndims)
+        dims_todrop = Vector{Int}()
+        for (i, j) in enumerate(I)
+            if j isa Number
+                push!(dims_todrop, i)
+                outidx[i] = 1
+            else
+                outidx[i] = (:)
+            end
+        end
+        outidx[vectordims] .= 0
+        inidx = Vector{Union{typeof.(I)..., (eltype(I[i]) for i in vectordims)...}}(undef, _ndims)
+        inidx .= reverse(I)
+
+        for ix in Iterators.product((1:length(I[i]) for i in vectordims)...)
+            for (i, j) in enumerate(ix)
+                outidx[vectordims[i]] = j
+                inidx[_ndims - vectordims[i] + 1] = I[vectordims[i]][j]
+            end
+            mat[outidx...] = dset.dset[inidx...]
+        end
+        return dropdims(mat, dims=Tuple(dims_todrop))
+    else
+        mat = getindex(dset.dset, reverse(I)...)
+        return ndims(mat) == 1 ? mat : mat'
+    end
 end
 Base.setindex!(dset::TransposedDataset, v, i::Int) =
     setindex!(dset.dset, v, ndims(dset.dset) - d + 1)
