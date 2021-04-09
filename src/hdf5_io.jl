@@ -135,7 +135,7 @@ write_impl(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, ::Nothing
 function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
-    rownames::Vector{String},
+    rownames::Union{AbstractVector{<:AbstractString}, Index{<:AbstractString}},
     data::DataFrame,
 )
     write_impl(parent, name, data)
@@ -145,7 +145,7 @@ function write_impl(
         idxname = "_" * idxname
     end
     g = parent[name]
-    write_impl(g, idxname, rownames)
+    write_impl(g, idxname, values(rownames))
     attributes(g)["_index"] = idxname
 end
 

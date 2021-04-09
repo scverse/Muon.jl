@@ -218,3 +218,4 @@ Base.in(elem::T, idx::Index{T}) where {T} = _getindex(idx, elem) != 0x0
 
 Base.length(idx::Index) = length(idx.vals)
 Base.size(idx::Index) = (length(idx),)
+Base.values(idx::Index) = idx.vals
