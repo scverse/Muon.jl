@@ -203,8 +203,8 @@ end
 
 function Base.getindex(
     adata::AnnData,
-    I::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
-    J::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
+    I::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Integer, AbstractString},
+    J::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Integer, AbstractString},
 )
     i, j = convertidx(I, adata.obs_names), convertidx(J, adata.var_names)
     newad = AnnData(
@@ -221,16 +221,3 @@ function Base.getindex(
     copy_subset(adata.layers, newad.layers, i, j)
     return newad
 end
-
-@inline function convertidx(
-    idx::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}},
-    ref::Index{<:AbstractString},
-)
-    @boundscheck checkbounds(ref, idx)
-    return idx
-end
-@inline function convertidx(idx::Number, ref::Index{<:AbstractString})
-    @boundscheck checkbounds(ref, idx)
-    return [idx]
-end
-@inline convertidx(idx::Union{AbstractString, AbstractVector{<:AbstractString}}, ref::Index{<:AbstractString}) = ref[idx, true]

@@ -16,18 +16,6 @@ function hdf5_object_name(obj::Union{HDF5.File, HDF5.Group, HDF5.Dataset})
     return name[(last(findlast("/", name)) + 1):end]
 end
 
-Base.getindex(
-    adata::Union{AnnData, MuData},
-    i::Integer,
-    J::Union{AbstractUnitRange, Colon, Vector{<:Integer}},
-) = getindex(adata, i:i, J)
-Base.getindex(
-    adata::Union{AnnData, MuData},
-    I::Union{AbstractUnitRange, Colon, Vector{<:Integer}},
-    j::Integer,
-) = getindex(adata, I, j:j)
-Base.getindex(adata::Union{AnnData, MuData}, i::Integer, j::Integer) = getindex(adata, i:i, j:j)
-
 function find_unique_colnames(mdata::MuData, property::Symbol, ncols::Int)
     nchars = 16
     allunique = false
@@ -69,6 +57,22 @@ function minimum_unsigned_type_for_n(n::Number)
     end
     return mintype
 end
+
+@inline function convertidx(
+    idx::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}},
+    ref::Index{<:AbstractString},
+)
+    @boundscheck checkbounds(ref, idx)
+    return idx
+end
+@inline function convertidx(idx::Number, ref::Index{<:AbstractString})
+    @boundscheck checkbounds(ref, idx)
+    return idx:idx
+end
+@inline convertidx(
+    idx::Union{AbstractString, AbstractVector{<:AbstractString}},
+    ref::Index{<:AbstractString},
+) = ref[idx, true]
 
 Base.axes(A::Union{MuData, AnnData}) = map(n -> Base.OneTo(n), size(A))
 

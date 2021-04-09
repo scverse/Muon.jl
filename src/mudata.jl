@@ -162,41 +162,61 @@ Base.getindex(mdata::MuData, modality::Symbol) = mdata.mod[String(modality)]
 Base.getindex(mdata::MuData, modality::AbstractString) = mdata.mod[modality]
 function Base.getindex(
     mdata::MuData,
-    I::Union{AbstractUnitRange, Colon, Vector{<:Integer}},
-    J::Union{AbstractUnitRange, Colon, Vector{<:Integer}},
+    I::Union{
+        AbstractUnitRange,
+        Colon,
+        AbstractVector{<:Integer},
+        AbstractVector{<:AbstractString},
+        Number,
+        AbstractString,
+    },
+    J::Union{
+        AbstractUnitRange,
+        Colon,
+        AbstractVector{<:Integer},
+        AbstractVector{<:AbstractString},
+        Number,
+        AbstractString,
+    },
 )
-    @boundscheck checkbounds(mdata, I, J)
+    @boundscheck begin
+        i = I isa AbstractString || I isa AbstractVector{<:AbstractString} ? (:) : I
+        j = J isa AbstractString || J isa AbstractVector{<:AbstractString} ? (:) : J
+        checkbounds(mdata, i, j)
+    end
+    i, j = convertidx(I, mdata.obs_names), convertidx(J, mdata.var_names)
     newmu = MuData(
         mod=Dict{String, AnnData}(
             k => ad[
-                getadidx(I, mdata.obsm[k], mdata.obs_names, ad.obs_names),
-                getadidx(J, mdata.varm[k], mdata.var_names, ad.var_names),
+                getadidx(I, mdata.obsm[k], mdata.obs_names),
+                getadidx(J, mdata.varm[k], mdata.var_names),
             ] for (k, ad) in mdata.mod
         ),
-        obs=isempty(mdata.obs) ? nothing : mdata.obs[I, :],
-        obs_names=mdata.obs_names[I],
-        var=isempty(mdata.var) ? nothing : mdata.var[J, :],
-        var_names=mdata.var_names[J],
+        obs=isempty(mdata.obs) ? nothing : mdata.obs[i, :],
+        obs_names=mdata.obs_names[i],
+        var=isempty(mdata.var) ? nothing : mdata.var[j, :],
+        var_names=mdata.var_names[j],
     )
-    copy_subset(mdata.obsm, newmu.obsm, I, J)
-    copy_subset(mdata.varm, newmu.varm, I, J)
-    copy_subset(mdata.obsp, newmu.obsp, I, J)
-    copy_subset(mdata.varp, newmu.varp, I, J)
+    copy_subset(mdata.obsm, newmu.obsm, i, j)
+    copy_subset(mdata.varm, newmu.varm, i, j)
+    copy_subset(mdata.obsp, newmu.obsp, i, j)
+    copy_subset(mdata.varp, newmu.varp, i, j)
     return newmu
 end
 
-getadidx(
-    I::Colon,
-    ref::AbstractVector{<:Unsigned},
-    idx::Index{<:AbstractString},
-    adidx::Index{<:AbstractString},
-) = I
+getadidx(I::Colon, ref::AbstractVector{<:Unsigned}, idx::Index{<:AbstractString}) = I
 getadidx(
     I::Union{AbstractVector{<:Integer}, AbstractUnitRange},
     ref::AbstractVector{<:Unsigned},
     idx::Index{<:AbstractString},
-    adidx::Index{<:AbstractString},
 ) = filter(x -> x > 0x0, ref[I])
+getadidx(
+    I::Union{AbstractString, AbstractVector{<:AbstractString}},
+    ref::AbstractVector{<:Unsigned},
+    idx::Index{<:AbstractString},
+) = getadidx(idx[I, true], ref, idx)
+getadix(I::Number, ref::AbstractVector{<:Unsigned}, idx::Index{<:AbstractString}) =
+    getadidx([I], ref, idx)
 
 function Base.show(io::IO, mdata::MuData)
     compact = get(io, :compact, false)
@@ -228,8 +248,11 @@ function update_attr!(mdata::MuData, attr::Symbol)
     if !isempty(mdata.mod)
         try
             newdf = reduce((
-                mod => insertcols!(getproperty(ad, attr), idxcol => getproperty(ad, namesattr), rowcol => 1:nrow(getproperty(ad, attr)))
-                for (mod, ad) in mdata.mod
+                mod => insertcols!(
+                    getproperty(ad, attr),
+                    idxcol => getproperty(ad, namesattr),
+                    rowcol => 1:nrow(getproperty(ad, attr)),
+                ) for (mod, ad) in mdata.mod
             )) do df1, df2
                 outerjoin(
                     df1.second,
@@ -276,7 +299,8 @@ function update_attr!(mdata::MuData, attr::Symbol)
         adindices = newdf[!, colname]
         select!(newdf, Not(colname))
         replace!(adindices, missing => 0)
-        getproperty(mdata, mattr)[mod] = convert(Vector{minimum_unsigned_type_for_n(maximum(adindices))}, adindices)
+        getproperty(mdata, mattr)[mod] =
+            convert(Vector{minimum_unsigned_type_for_n(maximum(adindices))}, adindices)
     end
 
     keep_index = rownames .∈ (old_rownames,)
