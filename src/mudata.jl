@@ -179,11 +179,7 @@ function Base.getindex(
         AbstractString,
     },
 )
-    @boundscheck begin
-        i = I isa AbstractString || I isa AbstractVector{<:AbstractString} ? (:) : I
-        j = J isa AbstractString || J isa AbstractVector{<:AbstractString} ? (:) : J
-        checkbounds(mdata, i, j)
-    end
+    @boundscheck checkbounds(mdata, I, J)
     i, j = convertidx(I, mdata.obs_names), convertidx(J, mdata.var_names)
     newmu = MuData(
         mod=Dict{String, AnnData}(
@@ -215,7 +211,7 @@ getadidx(
     ref::AbstractVector{<:Unsigned},
     idx::Index{<:AbstractString},
 ) = getadidx(idx[I, true], ref, idx)
-getadix(I::Number, ref::AbstractVector{<:Unsigned}, idx::Index{<:AbstractString}) =
+getadidx(I::Number, ref::AbstractVector{<:Unsigned}, idx::Index{<:AbstractString}) =
     getadidx([I], ref, idx)
 
 function Base.show(io::IO, mdata::MuData)

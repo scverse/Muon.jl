@@ -75,7 +75,11 @@ end
 Base.axes(A::Union{MuData, AnnData}) = map(n -> Base.OneTo(n), size(A))
 
 @inline function Base.checkbounds(::Type{Bool}, A::Union{MuData, AnnData}, I...)
-    Base.checkbounds_indices(Bool, axes(A), I)
+    Base.checkbounds_indices(
+        Bool,
+        axes(A),
+        Tuple(i isa AbstractString || i isa AbstractVector{<:AbstractString} ? (:) : i for i in I),
+    )
 end
 
 @inline function Base.checkbounds(A::Union{MuData, AnnData}, I...)
