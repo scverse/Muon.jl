@@ -10,3 +10,6 @@ end
 @testset "AnnData" begin
     include("anndata.jl")
 end
+@testset "MuData" begin
+    include("mudata.jl")
+end
