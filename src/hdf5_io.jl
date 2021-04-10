@@ -135,7 +135,7 @@ write_impl(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, ::Nothing
 function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
-    rownames::Union{AbstractVector{<:AbstractString}, Index{<:AbstractString}},
+    rownames::AbstractVector{<:AbstractString},
     data::DataFrame,
 )
     write_impl(parent, name, data)
