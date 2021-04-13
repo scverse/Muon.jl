@@ -48,8 +48,8 @@ mutable struct MuData
             mdata.mod[modality] = AnnData(file["mod"][modality], backed)
         end
 
-        update_attr!(mdata, :var)
-        update_attr!(mdata, :obs)
+        _update_attr!(mdata, :var, 0, true)
+        _update_attr!(mdata, :obs, 1)
         return mdata
     end
 
@@ -86,8 +86,8 @@ mutable struct MuData
         mdata.obsp = StrAlignedMapping{Tuple{1 => 1, 2 => 1}}(mdata, obsp)
         mdata.varp = StrAlignedMapping{Tuple{1 => 2, 2 => 2}}(mdata, varp)
 
-        update_attr!(mdata, :var)
-        update_attr!(mdata, :obs)
+        _update_attr!(mdata, :var, 0, true)
+        _update_attr!(mdata, :obs, 1)
         return mdata
     end
 end
@@ -230,7 +230,7 @@ end
 
 isbacked(mdata::MuData) = mdata.file !== nothing
 
-function update_attr!(mdata::MuData, attr::Symbol)
+function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::Bool=false)
     globalcols = [
         col for
         col in names(getproperty(mdata, attr)) if !any(startswith.(col, keys(mdata.mod) .* ":"))
@@ -239,23 +239,77 @@ function update_attr!(mdata::MuData, attr::Symbol)
     namesattr = Symbol(string(attr) * "_names")
     old_rownames = getproperty(mdata, namesattr)
 
-    idxcol, rowcol = find_unique_colnames(mdata, attr, 2)
+    idxcol, rowcol, dupidxcol = find_unique_colnames(mdata, attr, 3)
+
+    if join_common &&
+       length(mdata.mod) > 1 &&
+       !all(
+           isdisjoint(getproperty(ad_i, namesattr), getproperty(ad_j, namesattr)) for
+           (i, ad_i) in enumerate(values(mdata.mod)), (j, ad_j) in enumerate(values(mdata.mod)) if
+           j > i
+       )
+        @warn "Cannot join columns with the same name because $(string(namesattr)) are intersecting."
+        join_common = false
+    end
+
+    dupidx = Dict(mod => index_duplicates(getproperty(ad, namesattr)) for (mod, ad) in mdata.mod)
+    for (mod, dups) in dupidx, (mod2, ad) in mdata.mod
+        if mod != mod2 && any(
+            unique(getproperty(mdata.mod[mod], namesattr)[dups .> 0]) .∈
+            (getproperty(ad, namesattr),),
+        )
+            @warn "Duplicated $(string(namesattr)) should not be present in different modalities due to the ambiguitiy that leads to."
+            break
+        end
+    end
 
     if !isempty(mdata.mod)
         if length(mdata.mod) > 1
-            newdf = outerjoin(
-                (
+            if join_common
+                commoncols =
+                    intersect((names(getproperty(ad, attr)) for ad in values(mdata.mod))...)
+                globaldata = select(globaldata, Not(intersect(commoncols, names(globaldata))))
+                dfs = (
+                    insertcols!(
+                        rename!(
+                            x -> mod * ":" * x,
+                            select(getproperty(ad, attr), Not(commoncols), copycols=false),
+                        ),
+                        idxcol => getproperty(ad, namesattr),
+                        dupidxcol => dupidx[mod],
+                        mod * ":" * rowcol => 1:length(getproperty(ad, namesattr)),
+                    ) for (mod, ad) in mdata.mod
+                )
+                data_mod =
+                    axis == 0 ? vcat(dfs..., cols=:union) :
+                    outerjoin(dfs..., on=[idxcol, dupidxcol])
+
+                data_common = vcat(
+                    (
+                        insertcols!(
+                            select(getproperty(ad, attr), commoncols..., copycols=false),
+                            idxcol => getproperty(ad, namesattr),
+                            dupidxcol => dupidx[mod],
+                        ) for (mod, ad) in mdata.mod
+                    )...,
+                )
+                data_mod = leftjoin(data_mod, data_common, on=[idxcol, dupidxcol])
+            else
+                dfs = (
                     insertcols!(
                         rename!(
                             x -> mod * ":" * x,
                             select(getproperty(ad, attr), :, copycols=false),
                         ),
                         idxcol => getproperty(ad, namesattr),
+                        dupidxcol => dupidx[mod],
                         mod * ":" * rowcol => 1:length(getproperty(ad, namesattr)),
                     ) for (mod, ad) in mdata.mod
-                )...,
-                on=idxcol,
-            )
+                )
+                data_mod =
+                    axis == 0 ? vcat(dfs..., cols=:union) :
+                    outerjoin(dfs..., on=[idxcol, dupidxcol])
+            end
         elseif length(mdata.mod) == 1
             mod, ad = iterate(mdata.mod)[1]
             newdf = insertcols!(
@@ -264,13 +318,17 @@ function update_attr!(mdata::MuData, attr::Symbol)
                 mod * ":" * rowcol => 1:length(getproperty(ad, namesattr)),
             )
         end
-        newdf = leftjoin(
-            newdf,
-            insertcols!(globaldata, idxcol => getproperty(mdata, namesattr)),
-            on=idxcol,
+        data_mod = leftjoin(
+            data_mod,
+            insertcols!(
+                globaldata,
+                idxcol => old_rownames,
+                dupidxcol => index_duplicates(old_rownames),
+            ),
+            on=[idxcol, dupidxcol],
         )
-        rownames = newdf[!, idxcol]
-        select!(newdf, Not(idxcol))
+        rownames = data_mod[!, idxcol]
+        select!(data_mod, Not([idxcol, dupidxcol]))
 
         try
             rownames = convert(Vector{nonmissingtype(eltype(rownames))}, rownames)
@@ -284,18 +342,18 @@ function update_attr!(mdata::MuData, attr::Symbol)
             end
         end
     else
-        newdf = DataFrame()
+        data_mod = DataFrame()
         rownames = Vector{String}()
     end
 
-    setproperty!(mdata, attr, newdf)
+    setproperty!(mdata, attr, data_mod)
     setproperty!(mdata, namesattr, Index(rownames))
 
     mattr = Symbol(string(attr) * "m")
     for (mod, ad) in mdata.mod
         colname = mod * ":" * rowcol
-        adindices = newdf[!, colname]
-        select!(newdf, Not(colname))
+        adindices = data_mod[!, colname]
+        select!(data_mod, Not(colname))
         replace!(adindices, missing => 0)
         getproperty(mdata, mattr)[mod] =
             convert(Vector{minimum_unsigned_type_for_n(maximum(adindices))}, adindices)
@@ -318,6 +376,13 @@ function update_attr!(mdata::MuData, attr::Symbol)
     end
 
     nothing
+end
+
+update_obs!(mdata::MuData) = _update_attr!(mdata, :obs, 1)
+update_var!(mdata::MuData) = _update_attr!(mdata, :var, 0, true)
+function update!(mdata::MuData)
+    update_obs!(mdata)
+    update_var!(mdata)
 end
 
 function shrink_attr(mdata::MuData, attr::Symbol)

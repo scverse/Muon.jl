@@ -8,7 +8,7 @@ using HDF5
 using DataFrames
 using CategoricalArrays
 
-export readh5mu, readh5ad, writeh5mu, writeh5ad, isbacked
+export readh5mu, readh5ad, writeh5mu, writeh5ad, isbacked, update_obs!, update_var!, update!
 export AnnData, MuData
 
 include("index.jl")

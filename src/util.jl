@@ -25,10 +25,11 @@ function find_unique_colnames(mdata::MuData, property::Symbol, ncols::Int)
         allunique = length(Set(colnames)) == ncols
         nchars *= 2
     end
-    finished = false
+
     it = Iterators.flatten(((mdata,), values(mdata.mod)))
-    while !finished
-        for i in 1:ncols
+    for i in 1:ncols
+        finished = false
+        while !finished
             for ad in it
                 try
                     names(getproperty(ad, property), colnames[i])
@@ -40,10 +41,24 @@ function find_unique_colnames(mdata::MuData, property::Symbol, ncols::Int)
                     end
                 end
             end
+            finished = true
         end
-        finished = true
     end
     return colnames
+end
+
+function index_duplicates(idx::Index{T}) where T
+    counter = Dict{T, UInt8}()
+    dup_idx = Vector{UInt8}(undef, length(idx))
+    for (i, val) in enumerate(idx)
+        if val in keys(counter)
+            count = counter[val] + 1
+        else
+            count = 0
+        end
+        dup_idx[i] = counter[val] = count
+    end
+    return dup_idx
 end
 
 function minimum_unsigned_type_for_n(n::Number)
