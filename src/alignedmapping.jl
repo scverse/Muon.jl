@@ -3,7 +3,11 @@ abstract type AbstractAlignedMapping{T <: Tuple, K, V} <: AbstractDict{K, V} end
 struct AlignedMapping{T <: Tuple, K, R} <: AbstractAlignedMapping{
     T,
     K,
-    Union{AbstractArray{<:Number}, AbstractArray{Union{Missing, T}} where T <: Number, DataFrame},
+    Union{
+        AbstractArray{<:Number},
+        AbstractArray{Union{Missing, T}} where T <: Number,
+        AbstractDataFrame,
+    },
 }
     ref::R # any type as long as it supports size()
     d::Dict{
@@ -90,7 +94,7 @@ function Base.setindex!(d::AlignedMapping{T}, v::Union{AbstractArray, DataFrame}
     checkdim(T, v, d.ref, k)
     d.d[k] = v
 end
-Base.sizehint!(d::AbstractAlignedMapping, n) = sizehint!(d.d, n)
+Base.sizehint!(d::AlignedMapping, n) = sizehint!(d.d, n)
 
 AlignedMapping{T}(r, d::AbstractDict) where {T <: Tuple} = AlignedMapping{T, keytype(d)}(r, d)
 AlignedMapping{T, K}(ref) where {T, K} = AlignedMapping{T}(ref, Dict{K, AbstractMatrix{<:Number}}())
@@ -165,11 +169,11 @@ function Base.pop!(d::BackedAlignedMapping, k, default)
     end
 end
 function Base.setindex!(d::BackedAlignedMapping{T}, v::AbstractArray, k) where {T}
-    checkdim(T, v, d.d, k)
-    if isnothing(d.ref)
-        d.ref = create_group(d.parent, d.path)
+    checkdim(T, v, d.ref, k)
+    if isnothing(d.d)
+        d.d = create_group(d.parent, d.path)
     end
-    write_attr(d.g, k, v)
+    write_attr(d.d, k, v)
 end
 
 const StrAlignedMapping{T <: Tuple, R} = AlignedMapping{T, String, R}
@@ -186,10 +190,69 @@ function copy_subset(
         elseif refdim == 2
             J
         else
-            Colon()
+            (:)
         end for (vdim, refdim) in T.parameters
     )
     for (k, v) in src
-        dst[k] = v[idx..., (Colon() for i in 1:(ndims(v) - length(idx)))...]
+        dst[k] = v[idx..., ((:) for i in 1:(ndims(v) - length(idx)))...]
     end
+end
+
+struct AlignedMappingView{T <: Tuple, K, V, P <: AbstractAlignedMapping{T, K, V}} <:
+       AbstractAlignedMapping{T, K, V}
+    parent::P
+    indices::Tuple
+end
+
+function aligned_view(d::AlignedMappingView{T}, A) where {T <: Tuple}
+    idx = Vector{Union{Colon, typeof(d.indices).parameters...}}(undef, ndims(A))
+    idx .= (:)
+    for ((vdim, refdim), cidx) in zip(T.parameters, d.indices)
+        idx[vdim] = cidx
+    end
+    return @inbounds view(A, idx...)
+end
+
+Base.delete!(d::AlignedMappingView, k) = delete!(d.parent, k)
+Base.empty!(d::AlignedMappingView) = empty!(d.parent)
+Base.getindex(d::AlignedMappingView, key) = aligned_view(d, getindex(d.parent, key))
+Base.get(d::AlignedMappingView, key, default) =
+    haskey(d.parent, key) ? aligned_view(d, get(d.parent, key)) : default
+Base.get(default::Base.Callable, d::AlignedMappingView, key) =
+    haskey(d.parent, key) ? aligned_view(d, get(d.parent, key)) : default()
+Base.haskey(d::AlignedMappingView, key) = haskey(d.parent, key)
+Base.isempty(d::AlignedMappingView) = isempty(d.parent)
+function Base.iterate(d::AlignedMappingView)
+    res = iterate(d.parent)
+    if !isnothing(res)
+        (k, v), state = res
+        return (k, aligned_view(d, v)), state
+    else
+        return res
+    end
+end
+function Base.iterate(d::AlignedMappingView, i)
+    res = iterate(d.parent, i)
+    if !isnothing(res)
+        (k, v), state = res
+        return (k, aligned_view(d, v)), state
+    else
+        return res
+    end
+end
+Base.length(d::AlignedMappingView) = length(d.parent)
+Base.pop!(d::AlignedMappingView) = aligned_view(d, pop!(d.parent))
+Base.pop!(d::AlignedMappingView, k) = aligned_view(d, pop!(d.parent, k))
+Base.pop!(d::AlignedMappingView, k, default) =
+    haskey(d.parent, k) ? aligned_view(d, pop!(d.d, k)) : default
+
+function Base.view(parent::AbstractAlignedMapping{T}, indices...) where {T <: Tuple}
+    @boundscheck if length(T.parameters) != length(indices)
+        throw(
+            DimensionMismatch(
+                "Attempt to index into AlignedMapping with $(length(T.parameters)) aligned dimensions using index of length $(length(parent.indices))",
+            ),
+        )
+    end
+    return AlignedMappingView(parent, indices)
 end
