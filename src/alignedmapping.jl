@@ -260,3 +260,14 @@ function Base.view(parent::AbstractAlignedMapping{T}, indices...) where {T <: Tu
     end
     return AlignedMappingView(parent, indices)
 end
+
+function Base.view(parentview::AlignedMappingView{T}, indices...) where T <: Tuple
+    @boundscheck if length(T.parameters) != length(indices)
+        throw(
+            DimensionMismatch(
+                "Attempt to index into AlignedMappingView with $(length(T.parameters)) aligned dimensions using index of length $(length(indices))",
+            ),
+        )
+    end
+    return AlignedMappingView(parent(parentview), Base.reindex(parentindices(parentview), indices))
+end
