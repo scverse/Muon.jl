@@ -245,12 +245,16 @@ Base.pop!(d::AlignedMappingView) = aligned_view(d, pop!(d.parent))
 Base.pop!(d::AlignedMappingView, k) = aligned_view(d, pop!(d.parent, k))
 Base.pop!(d::AlignedMappingView, k, default) =
     haskey(d.parent, k) ? aligned_view(d, pop!(d.d, k)) : default
+Base.parent(d::AlignedMappingView) = d.parent
+Base.parentindices(d::AlignedMappingView) = d.indices
+
+Base.setindex!(d::AlignedMappingView, v::AbstractArray, k) = throw(ArgumentError("Replacing or adding elements of an AlignedMappingView is not supported."))
 
 function Base.view(parent::AbstractAlignedMapping{T}, indices...) where {T <: Tuple}
     @boundscheck if length(T.parameters) != length(indices)
         throw(
             DimensionMismatch(
-                "Attempt to index into AlignedMapping with $(length(T.parameters)) aligned dimensions using index of length $(length(parent.indices))",
+                "Attempt to index into AlignedMapping with $(length(T.parameters)) aligned dimensions using index of length $(length(indices))",
             ),
         )
     end
