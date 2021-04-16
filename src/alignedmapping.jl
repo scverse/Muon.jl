@@ -176,8 +176,6 @@ function Base.setindex!(d::BackedAlignedMapping{T}, v::AbstractArray, k) where {
     write_attr(d.d, k, v)
 end
 
-const StrAlignedMapping{T <: Tuple, R} = AlignedMapping{T, String, R}
-
 function copy_subset(
     src::AbstractAlignedMapping{T},
     dst::AbstractAlignedMapping,
@@ -271,3 +269,6 @@ function Base.view(parentview::AlignedMappingView{T}, indices...) where T <: Tup
     end
     return AlignedMappingView(parent(parentview), Base.reindex(parentindices(parentview), indices))
 end
+
+const StrAlignedMapping{T <: Tuple, R} = AlignedMapping{T, String, R}
+const StrAlignedMappingView{T <: Tuple} = AlignedMappingView{T, String}

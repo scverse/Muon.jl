@@ -74,22 +74,22 @@ function minimum_unsigned_type_for_n(n::Number)
 end
 
 @inline function convertidx(
-    idx::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}},
-    ref::Index{<:AbstractString},
+    idx::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}, AbstractVector{Bool}},
+    ref::AbstractIndex{<:AbstractString},
 )
     return idx
 end
-@inline function convertidx(idx::Number, ref::Index{<:AbstractString})
+@inline function convertidx(idx::Number, ref::AbstractIndex{<:AbstractString})
     return idx:idx
 end
 @inline convertidx(
     idx::Union{AbstractString, AbstractVector{<:AbstractString}},
-    ref::Index{<:AbstractString},
+    ref::AbstractIndex{<:AbstractString},
 ) = ref[idx, true]
 
-Base.axes(A::Union{MuData, AnnData}) = map(n -> Base.OneTo(n), size(A))
+Base.axes(A::Union{MuData, AbstractAnnData}) = map(n -> Base.OneTo(n), size(A))
 
-@inline function Base.checkbounds(::Type{Bool}, A::Union{MuData, AnnData}, I...)
+@inline function Base.checkbounds(::Type{Bool}, A::Union{MuData, AbstractAnnData}, I...)
     Base.checkbounds_indices(
         Bool,
         axes(A),
@@ -97,7 +97,7 @@ Base.axes(A::Union{MuData, AnnData}) = map(n -> Base.OneTo(n), size(A))
     )
 end
 
-@inline function Base.checkbounds(A::Union{MuData, AnnData}, I...)
+@inline function Base.checkbounds(A::Union{MuData, AbstractAnnData}, I...)
     checkbounds(Bool, A, I...) || throw(BoundsError(A, I))
     nothing
 end
@@ -107,7 +107,7 @@ function Base.summary(A::Union{MuData, AnnData})
     return "$(typeof(A)) with $(s[1]) observations and $(s[2]) variables"
 end
 
-Base.summary(io::IO, A::Union{MuData, AnnData}) = print(io, summary(A))
+Base.summary(io::IO, A::Union{MuData, AbstractAnnData}) = print(io, summary(A))
 
-Base.firstindex(A::Union{MuData, AnnData}, d::Integer) = 1
-Base.lastindex(A::Union{MuData, AnnData}, d::Integer) = size(A, d)
+Base.firstindex(A::Union{MuData, AbstractAnnData}, d::Integer) = 1
+Base.lastindex(A::Union{MuData, AbstractAnnData}, d::Integer) = size(A, d)

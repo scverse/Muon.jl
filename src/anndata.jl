@@ -1,4 +1,6 @@
-mutable struct AnnData
+abstract type AbstractAnnData end
+
+mutable struct AnnData <: AbstractAnnData
     file::Union{HDF5.File, HDF5.Group, Nothing}
 
     X::Union{AbstractMatrix{<:Number}, Nothing}
@@ -116,6 +118,8 @@ mutable struct AnnData
     end
 end
 
+file(ad::AnnData) = ad.file
+
 function readh5ad(filename::AbstractString; backed=true)
     filename = abspath(filename) # this gets stored in the HDF5 objects for backed datasets
     if !backed
@@ -134,9 +138,9 @@ function readh5ad(filename::AbstractString; backed=true)
     return adata
 end
 
-function writeh5ad(filename::AbstractString, adata::AnnData)
+function writeh5ad(filename::AbstractString, adata::AbstractAnnData)
     filename = abspath(filename)
-    if adata.file === nothing || filename != HDF5.filename(adata.file)
+    if file(adata) === nothing || filename != HDF5.filename(file(adata))
         file = h5open(filename, "w")
         try
             write(file, adata)
@@ -148,29 +152,29 @@ function writeh5ad(filename::AbstractString, adata::AnnData)
     end
 end
 
-function Base.write(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, adata::AnnData)
+function Base.write(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, adata::AbstractAnnData)
     g = create_group(parent, name)
     write(g, adata)
 end
 
-function Base.write(parent::Union{HDF5.File, HDF5.Group}, adata::AnnData)
-    if parent === adata.file
+function Base.write(parent::Union{HDF5.File, HDF5.Group}, adata::AbstractAnnData)
+    if parent === file(adata)
         write(adata)
     else
         write_attr(parent, "X", adata.X)
+        write_attr(parent, "layers", adata.layers)
         write_unbacked(parent, adata)
     end
 end
 
 function Base.write(adata)
-    if adata.file === nothing
+    if file(adata) === nothing
         throw("adata is not backed, need somewhere to write to")
     end
-    write_unbacked(adata.file, adata)
+    write_unbacked(file(adata), adata)
 end
 
-function write_unbacked(parent::Union{HDF5.File, HDF5.Group}, adata::AnnData)
-    write_attr(parent, "layers", adata.layers)
+function write_unbacked(parent::Union{HDF5.File, HDF5.Group}, adata::AbstractAnnData)
     write_attr(parent, "obs", adata.obs_names, adata.obs)
     write_attr(parent, "obsm", adata.obsm)
     write_attr(parent, "obsp", adata.obsp)
@@ -179,30 +183,30 @@ function write_unbacked(parent::Union{HDF5.File, HDF5.Group}, adata::AnnData)
     write_attr(parent, "varp", adata.varp)
 end
 
-Base.size(adata::AnnData) = (length(adata.obs_names), length(adata.var_names))
-Base.size(adata::AnnData, d::Integer) = size(adata)[d]
+Base.size(adata::AbstractAnnData) = (length(adata.obs_names), length(adata.var_names))
+Base.size(adata::AbstractAnnData, d::Integer) = size(adata)[d]
 
-function Base.show(io::IO, adata::AnnData)
+function Base.show(io::IO, adata::AbstractAnnData)
     compact = get(io, :compact, false)
     print(io, """AnnData object $(size(adata)[1]) \u2715 $(size(adata)[2])""")
 end
 
-function Base.show(io::IO, ::MIME"text/plain", adata::AnnData)
+function Base.show(io::IO, ::MIME"text/plain", adata::AbstractAnnData)
     show(io, adata)
 end
 
-isbacked(adata::AnnData) = adata.file !== nothing
+isbacked(adata::AbstractAnnData) = file(adata) !== nothing
 
 function Base.getproperty(adata::AnnData, s::Symbol)
     if s === :X && isbacked(adata)
-        return backed_matrix(adata.file["X"])
+        return backed_matrix(file(adata)["X"])
     else
         return getfield(adata, s)
     end
 end
 
 function Base.getindex(
-    adata::AnnData,
+    adata::AbstractAnnData,
     I::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Integer, AbstractString},
     J::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Integer, AbstractString},
 )
@@ -222,3 +226,50 @@ function Base.getindex(
     copy_subset(adata.layers, newad.layers, i, j)
     return newad
 end
+
+struct AnnDataView{Ti, Tj} <: AbstractAnnData
+    parent::AnnData
+    I::Ti
+    J::Tj
+
+    X::Union{AbstractMatrix{<:Number}, Nothing}
+
+    obs::SubDataFrame
+    obs_names::SubIndex{<:AbstractString}
+
+    var::SubDataFrame
+    var_names::SubIndex{<:AbstractString}
+
+    obsm::StrAlignedMappingView{Tuple{1 => 1}}
+    obsp::StrAlignedMappingView{Tuple{1 => 1, 2 => 1}}
+
+    varm::StrAlignedMappingView{Tuple{1 => 2}}
+    varp::StrAlignedMappingView{Tuple{1 => 2, 2 => 2}}
+
+    layers::StrAlignedMappingView{Tuple{1 => 1, 2 => 2}}
+end
+
+function Base.view(ad::AnnData, I, J)
+    @boundscheck checkbounds(ad, I, J)
+    i, j = convertidx(I, ad.obs_names), convertidx(J, ad.var_names)
+    X = isbacked(ad) ? nothing : @view ad.X[i, j]
+
+    return AnnDataView(ad, i, j, X, view(ad.obs, i, :), view(ad.obs_names, i), view(ad.var, j, :), view(ad.var_names, j), view(ad.obsm, i), view(ad.obsp, i, i), view(ad.varm, j), view(ad.varp, j, j), view(ad.layers, i, j))
+end
+function Base.view(ad::AnnDataView, I, J)
+    @boundscheck checkbounds(ad, I, J)
+    i, j = Base.reindex(parentindices(ad), (convertidx(I, ad.obs_names), convertidx(J, ad.var_names)))
+    return view(parent(ad), i, j)
+end
+
+function Base.getproperty(ad::AnnDataView, s::Symbol)
+    if s === :X && isbacked(ad)
+        return @view parent(ad).X[parentindices(ad)...]
+    else
+        return getfield(ad, s)
+    end
+end
+
+Base.parent(ad::AnnDataView) = ad.parent
+Base.parentindices(ad::AnnDataView) = (ad.I, ad.J)
+file(ad::AnnDataView) = file(parent(ad))
