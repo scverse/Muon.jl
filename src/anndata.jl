@@ -141,11 +141,11 @@ end
 function writeh5ad(filename::AbstractString, adata::AbstractAnnData)
     filename = abspath(filename)
     if file(adata) === nothing || filename != HDF5.filename(file(adata))
-        file = h5open(filename, "w")
+        hfile = h5open(filename, "w")
         try
-            write(file, adata)
+            write(hfile, adata)
         finally
-            close(file)
+            close(hfile)
         end
     else
         write(adata)

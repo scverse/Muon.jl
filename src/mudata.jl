@@ -116,11 +116,11 @@ end
 function writeh5mu(filename::AbstractString, mudata::AbstractMuData)
     filename = abspath(filename)
     if file(mudata) === nothing || filename != HDF5.filename(file(mudata))
-        file = h5open(filename, "w")
+        hfile = h5open(filename, "w")
         try
-            write(file, mudata)
+            write(hfile, mudata)
         finally
-            close(file)
+            close(hfile)
         end
     else
         write(mudata)

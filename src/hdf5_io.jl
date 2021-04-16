@@ -117,7 +117,11 @@ function write_impl(
     attributes(parent[name])["categories"] = HDF5.Reference(parent["__categories"], name)
 end
 
-function write_impl(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, data::DataFrame)
+function write_impl(
+    parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    data::AbstractDataFrame,
+)
     g = create_group(parent, name)
     attrs = attributes(g)
     attrs["encoding-type"] = "dataframe"
@@ -129,14 +133,18 @@ function write_impl(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, 
     end
 end
 
-write_impl(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, ::Nothing, data::DataFrame) =
-    write(parent, name, data)
+write_impl(
+    parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    ::Nothing,
+    data::AbstractDataFrame,
+) = write_impl(parent, name, data)
 
 function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
     rownames::AbstractVector{<:AbstractString},
-    data::DataFrame,
+    data::AbstractDataFrame,
 )
     write_impl(parent, name, data)
     idxname = "_index"
@@ -159,12 +167,18 @@ write_impl(
     compress::UInt8=UInt8(9),
 ) = write_impl(parent, name, Int8.(data), extensible=extensible, compress=compress)
 
+write_impl(
+    parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    data::SubArray
+) = write_impl(parent, name, copy(data))
+
 function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
     data::AbstractArray;
     extensible::Bool=false,
-    compress::UInt8=UInt8(9),
+    compress::UInt8=0x9,
 )
     if ndims(data) > 1
         data = copy(data') # transpose for h5py compatibility
@@ -228,7 +242,7 @@ write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
     data::Adjoint{T, SparseMatrixCSC{T, V}} where {T <: Number, V <: Integer},
-) = write_impl(parent, name, data.parent, transposed=true)
+) = write_impl(parent, name, parent(data), transposed=true)
 
 write_impl(
     parent::Union{HDF5.File, HDF5.Group},
