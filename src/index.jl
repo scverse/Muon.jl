@@ -249,6 +249,10 @@ function Base.view(idx::Index, I::Integer)
     @boundscheck checkbounds(idx, I)
     return @inbounds view(idx, I:I)
 end
+function Base.view(idx::SubIndex, I)
+    @boundscheck checkbounds(idx, I)
+    return @inbounds view(parent(idx), Base.reindex((parentindices(idx),), (I,))[1])
+end
 
 Base.parent(si::SubIndex) = si.parent
 Base.parentindices(si::SubIndex) = si.indices
