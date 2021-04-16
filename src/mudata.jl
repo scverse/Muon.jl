@@ -166,7 +166,7 @@ Base.getindex(mdata::AbstractMuData, modality::AbstractString) = mdata.mod[modal
 function Base.getindex(
     mdata::AbstractMuData,
     I::Union{
-        AbstractUnitRange,
+        AbstractRange,
         Colon,
         AbstractVector{<:Integer},
         AbstractVector{<:AbstractString},
@@ -174,7 +174,7 @@ function Base.getindex(
         AbstractString,
     },
     J::Union{
-        AbstractUnitRange,
+        AbstractRange,
         Colon,
         AbstractVector{<:Integer},
         AbstractVector{<:AbstractString},
@@ -203,19 +203,39 @@ function Base.getindex(
     return newmu
 end
 
-getadidx(I::Colon, ref::AbstractVector{<:Unsigned}, idx::Index{<:AbstractString}) = I
 getadidx(
-    I::Union{AbstractVector{<:Integer}, AbstractUnitRange},
+    I::Colon,
     ref::AbstractVector{<:Unsigned},
-    idx::Index{<:AbstractString},
-) = filter(x -> x > 0x0, ref[I])
+    idx::AbstractIndex{<:AbstractString},
+    reduce_memory=false,
+) = I
+function getadidx(
+    I::Union{AbstractVector{<:Integer}, AbstractRange},
+    ref::AbstractVector{<:Unsigned},
+    idx::AbstractIndex{<:AbstractString},
+    reduce_memory=false,
+)
+    J = filter(x -> x > 0x0, ref[I])
+    if reduce_memory
+        diffs = unique(J[2:end] .- J[1:(end - 1)])
+        if length(diffs) == 1
+            return diffs[1] == 1 ? (J[1]:J[end]) : (J[1]:diffs[1]:J[end])
+        end
+    end
+    return J
+end
 getadidx(
     I::Union{AbstractString, AbstractVector{<:AbstractString}},
     ref::AbstractVector{<:Unsigned},
-    idx::Index{<:AbstractString},
+    idx::AbstractIndex{<:AbstractString},
+    reduce_memory=false,
 ) = getadidx(idx[I, true], ref, idx)
-getadidx(I::Number, ref::AbstractVector{<:Unsigned}, idx::Index{<:AbstractString}) =
-    getadidx([I], ref, idx)
+getadidx(
+    I::Number,
+    ref::AbstractVector{<:Unsigned},
+    idx::Index{<:AbstractString},
+    reduce_memory=false,
+) = getadidx([I], ref, idx)
 
 function Base.show(io::IO, mdata::AbstractMuData)
     compact = get(io, :compact, false)
@@ -415,7 +435,11 @@ function Base.view(mu::MuData, I, J)
     @boundscheck checkbounds(mu, I, J)
     i, j = convertidx(I, mu.obs_names), convertidx(J, mu.var_names)
     mod = Dict(
-        m => view(ad, getadidx(i, mu.obsm[m], mu.obs_names), getadidx(j, mu.obsm[m], mu.var_names)) for (m, ad) in mu.mod
+        m => view(
+            ad,
+            getadidx(i, mu.obsm[m], mu.obs_names, true),
+            getadidx(j, mu.obsm[m], mu.var_names, true),
+        ) for (m, ad) in mu.mod
     )
     return MuDataView(
         mu,
