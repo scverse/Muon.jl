@@ -195,8 +195,6 @@ function Base.show(io::IO, ::MIME"text/plain", adata::AbstractAnnData)
     show(io, adata)
 end
 
-isbacked(adata::AbstractAnnData) = file(adata) !== nothing
-
 function Base.getproperty(adata::AnnData, s::Symbol)
     if s === :X && isbacked(adata)
         return backed_matrix(file(adata)["X"])

@@ -87,9 +87,10 @@ end
     ref::AbstractIndex{<:AbstractString},
 ) = ref[idx, true]
 
-Base.axes(A::Union{MuData, AbstractAnnData}) = map(n -> Base.OneTo(n), size(A))
+Base.axes(A::Union{AbstractMuData, AbstractAnnData}) = map(n -> Base.OneTo(n), size(A))
+isbacked(ad::Union{AbstractMuData, AbstractAnnData}) = !isnothing(file(ad))
 
-@inline function Base.checkbounds(::Type{Bool}, A::Union{MuData, AbstractAnnData}, I...)
+@inline function Base.checkbounds(::Type{Bool}, A::Union{AbstractMuData, AbstractAnnData}, I...)
     Base.checkbounds_indices(
         Bool,
         axes(A),
@@ -97,17 +98,17 @@ Base.axes(A::Union{MuData, AbstractAnnData}) = map(n -> Base.OneTo(n), size(A))
     )
 end
 
-@inline function Base.checkbounds(A::Union{MuData, AbstractAnnData}, I...)
+@inline function Base.checkbounds(A::Union{AbstractMuData, AbstractAnnData}, I...)
     checkbounds(Bool, A, I...) || throw(BoundsError(A, I))
     nothing
 end
 
-function Base.summary(A::Union{MuData, AnnData})
+function Base.summary(A::Union{AbstractMuData, AbstractAnnData})
     s = size(A)
     return "$(typeof(A)) with $(s[1]) observations and $(s[2]) variables"
 end
 
-Base.summary(io::IO, A::Union{MuData, AbstractAnnData}) = print(io, summary(A))
+Base.summary(io::IO, A::Union{AbstractMuData, AbstractAnnData}) = print(io, summary(A))
 
-Base.firstindex(A::Union{MuData, AbstractAnnData}, d::Integer) = 1
-Base.lastindex(A::Union{MuData, AbstractAnnData}, d::Integer) = size(A, d)
+Base.firstindex(A::Union{AbstractMuData, AbstractAnnData}, d::Integer) = 1
+Base.lastindex(A::Union{AbstractMuData, AbstractAnnData}, d::Integer) = size(A, d)

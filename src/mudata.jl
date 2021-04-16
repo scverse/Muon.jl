@@ -1,4 +1,6 @@
-mutable struct MuData
+abstract type AbstractMuData end
+
+mutable struct MuData <: AbstractMuData
     file::Union{HDF5.File, Nothing}
     mod::Dict{String, AnnData}
 
@@ -75,7 +77,6 @@ mutable struct MuData
             merge!(mdata.mod, mod)
         end
 
-        # TODO: dimension checking. This needs merging dimensions of all the AnnDatas based on var_names/obs_names
         mdata.obs = isnothing(obs) ? DataFrame() : obs
         mdata.obs_names = isnothing(obs_names) ? Index(String[]) : Index(obs_names)
         mdata.var = isnothing(var) ? DataFrame() : var
@@ -91,6 +92,8 @@ mutable struct MuData
         return mdata
     end
 end
+
+file(mu::MuData) = mu.file
 
 function readh5mu(filename::AbstractString; backed=true)
     filename = abspath(filename) # this gets stored in the HDF5 objects for backed datasets
@@ -110,9 +113,9 @@ function readh5mu(filename::AbstractString; backed=true)
     return mdata
 end
 
-function writeh5mu(filename::AbstractString, mudata::MuData)
+function writeh5mu(filename::AbstractString, mudata::AbstractMuData)
     filename = abspath(filename)
-    if mudata.file === nothing || filename != HDF5.filename(mudata.file)
+    if file(mudata) === nothing || filename != HDF5.filename(file(mudata))
         file = h5open(filename, "w")
         try
             write(file, mudata)
@@ -124,8 +127,8 @@ function writeh5mu(filename::AbstractString, mudata::MuData)
     end
 end
 
-function Base.write(parent::Union{HDF5.File, HDF5.Group}, mudata::MuData)
-    if parent === mudata.file
+function Base.write(parent::Union{HDF5.File, HDF5.Group}, mudata::AbstractMuData)
+    if parent === file(mudata)
         write(mudata)
     else
         g = create_group(parent, "mod")
@@ -136,8 +139,8 @@ function Base.write(parent::Union{HDF5.File, HDF5.Group}, mudata::MuData)
     end
 end
 
-function Base.write(mudata::MuData)
-    if mudata.file === nothing
+function Base.write(mudata::AbstractMuData)
+    if isnothing(file(mudata))
         throw("adata is not backed, need somewhere to write to")
     end
     for adata in values(mudata.mod)
@@ -146,7 +149,7 @@ function Base.write(mudata::MuData)
     write_metadata(mudata.file, mudata)
 end
 
-function write_metadata(parent::Union{HDF5.File, HDF5.Group}, mudata::MuData)
+function write_metadata(parent::Union{HDF5.File, HDF5.Group}, mudata::AbstractMuData)
     write_attr(parent, "obs", mudata.obs_names, shrink_attr(mudata, :obs))
     write_attr(parent, "obsm", mudata.obsm)
     write_attr(parent, "obsp", mudata.obsp)
@@ -155,13 +158,13 @@ function write_metadata(parent::Union{HDF5.File, HDF5.Group}, mudata::MuData)
     write_attr(parent, "varp", mudata.varp)
 end
 
-Base.size(mdata::MuData) = (length(mdata.obs_names), length(mdata.var_names))
-Base.size(mdata::MuData, d::Integer) = size(mdata)[d]
+Base.size(mdata::AbstractMuData) = (length(mdata.obs_names), length(mdata.var_names))
+Base.size(mdata::AbstractMuData, d::Integer) = size(mdata)[d]
 
-Base.getindex(mdata::MuData, modality::Symbol) = mdata.mod[String(modality)]
-Base.getindex(mdata::MuData, modality::AbstractString) = mdata.mod[modality]
+Base.getindex(mdata::AbstractMuData, modality::Symbol) = mdata.mod[String(modality)]
+Base.getindex(mdata::AbstractMuData, modality::AbstractString) = mdata.mod[modality]
 function Base.getindex(
-    mdata::MuData,
+    mdata::AbstractMuData,
     I::Union{
         AbstractUnitRange,
         Colon,
@@ -214,7 +217,7 @@ getadidx(
 getadidx(I::Number, ref::AbstractVector{<:Unsigned}, idx::Index{<:AbstractString}) =
     getadidx([I], ref, idx)
 
-function Base.show(io::IO, mdata::MuData)
+function Base.show(io::IO, mdata::AbstractMuData)
     compact = get(io, :compact, false)
     repr = """MuData object $(size(mdata)[1]) \u2715 $(size(mdata)[2])"""
     for (name, adata) in mdata.mod
@@ -224,11 +227,9 @@ function Base.show(io::IO, mdata::MuData)
     print(io, repr)
 end
 
-function Base.show(io::IO, ::MIME"text/plain", mdata::MuData)
+function Base.show(io::IO, ::MIME"text/plain", mdata::AbstractMuData)
     show(io, mdata)
 end
-
-isbacked(mdata::MuData) = mdata.file !== nothing
 
 function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::Bool=false)
     globalcols = [
@@ -385,10 +386,59 @@ function update!(mdata::MuData)
     update_var!(mdata)
 end
 
-function shrink_attr(mdata::MuData, attr::Symbol)
+function shrink_attr(mdata::AbstractMuData, attr::Symbol)
     globalcols = [
         col for
         col in names(getproperty(mdata, attr)) if !any(startswith.(col, keys(mdata.mod) .* ":"))
     ]
     return disallowmissing!(select(getproperty(mdata, attr), globalcols))
 end
+
+struct MuDataView{Ti, Tj} <: AbstractMuData
+    parent::MuData
+    I::Ti
+    J::Tj
+
+    mod::Dict{String, <:AnnDataView}
+    obs::SubDataFrame
+    obs_names::SubIndex{<:AbstractString}
+    obsm::StrAlignedMappingView{Tuple{1 => 1}}
+    obsp::StrAlignedMappingView{Tuple{1 => 1, 2 => 1}}
+
+    var::SubDataFrame
+    var_names::SubIndex{<:AbstractString}
+    varm::StrAlignedMappingView{Tuple{1 => 2}}
+    varp::StrAlignedMappingView{Tuple{1 => 2, 2 => 2}}
+end
+
+function Base.view(mu::MuData, I, J)
+    @boundscheck checkbounds(mu, I, J)
+    i, j = convertidx(I, mu.obs_names), convertidx(J, mu.var_names)
+    mod = Dict(
+        m => view(ad, getadidx(i, mu.obsm[m], mu.obs_names), getadidx(j, mu.obsm[m], mu.var_names)) for (m, ad) in mu.mod
+    )
+    return MuDataView(
+        mu,
+        i,
+        j,
+        mod, # TODO: use FrozenDict from CompressHashDisplace.jl once https://github.com/Arkoniak/CompressHashDisplace.jl/pull/6 goes in
+        view(mu.obs, i, :),
+        view(mu.obs_names, i),
+        view(mu.obsm, i),
+        view(mu.obsp, i, i),
+        view(mu.var, j, :),
+        view(mu.var_names, j),
+        view(mu.varm, j),
+        view(mu.varp, j, j),
+    )
+end
+function Base.view(mu::MuDataView, I, J)
+    @boundscheck checkbounds(mu, I, J)
+    i, j =
+        Base.reindex(parentindices(mu), (convertidx(I, mu.obs_names), convertidx(J, mu.var_names)))
+    return view(parent(mu), i, j)
+end
+
+Base.parent(mu::MuDataView) = mu.parent
+Base.parentindices(mu::MuDataView) = (mu.I, mu.J)
+file(mu::MuDataView) = file(parent(mu))
