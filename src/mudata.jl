@@ -219,10 +219,10 @@ getadidx(I::Number, ref::AbstractVector{<:Unsigned}, idx::Index{<:AbstractString
 
 function Base.show(io::IO, mdata::AbstractMuData)
     compact = get(io, :compact, false)
-    repr = """MuData object $(size(mdata)[1]) \u2715 $(size(mdata)[2])"""
+    repr = """$(typeof(mdata).name.name) object $(size(mdata)[1]) \u2715 $(size(mdata)[2])"""
     for (name, adata) in mdata.mod
         repr *= """\n\u2514 $(name)"""
-        repr *= """\n  AnnData object $(size(adata)[1]) \u2715 $(size(adata)[2])"""
+        repr *= """\n  $(typeof(adata).name.name) object $(size(adata)[1]) \u2715 $(size(adata)[2])"""
     end
     print(io, repr)
 end

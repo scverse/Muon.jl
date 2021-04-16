@@ -152,7 +152,11 @@ function writeh5ad(filename::AbstractString, adata::AbstractAnnData)
     end
 end
 
-function Base.write(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, adata::AbstractAnnData)
+function Base.write(
+    parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    adata::AbstractAnnData,
+)
     g = create_group(parent, name)
     write(g, adata)
 end
@@ -188,7 +192,7 @@ Base.size(adata::AbstractAnnData, d::Integer) = size(adata)[d]
 
 function Base.show(io::IO, adata::AbstractAnnData)
     compact = get(io, :compact, false)
-    print(io, """AnnData object $(size(adata)[1]) \u2715 $(size(adata)[2])""")
+    print(io, """$(typeof(adata).name.name) object $(size(adata)[1]) \u2715 $(size(adata)[2])""")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", adata::AbstractAnnData)
@@ -205,8 +209,22 @@ end
 
 function Base.getindex(
     adata::AbstractAnnData,
-    I::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Integer, AbstractString},
-    J::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Integer, AbstractString},
+    I::Union{
+        AbstractUnitRange,
+        Colon,
+        AbstractVector{<:Integer},
+        AbstractVector{<:AbstractString},
+        Integer,
+        AbstractString,
+    },
+    J::Union{
+        AbstractUnitRange,
+        Colon,
+        AbstractVector{<:Integer},
+        AbstractVector{<:AbstractString},
+        Integer,
+        AbstractString,
+    },
 )
     @boundscheck checkbounds(adata, I, J)
     i, j = convertidx(I, adata.obs_names), convertidx(J, adata.var_names)
@@ -252,11 +270,26 @@ function Base.view(ad::AnnData, I, J)
     i, j = convertidx(I, ad.obs_names), convertidx(J, ad.var_names)
     X = isbacked(ad) ? nothing : @view ad.X[i, j]
 
-    return AnnDataView(ad, i, j, X, view(ad.obs, i, :), view(ad.obs_names, i), view(ad.var, j, :), view(ad.var_names, j), view(ad.obsm, i), view(ad.obsp, i, i), view(ad.varm, j), view(ad.varp, j, j), view(ad.layers, i, j))
+    return AnnDataView(
+        ad,
+        i,
+        j,
+        X,
+        view(ad.obs, i, :),
+        view(ad.obs_names, i),
+        view(ad.var, j, :),
+        view(ad.var_names, j),
+        view(ad.obsm, i),
+        view(ad.obsp, i, i),
+        view(ad.varm, j),
+        view(ad.varp, j, j),
+        view(ad.layers, i, j),
+    )
 end
 function Base.view(ad::AnnDataView, I, J)
     @boundscheck checkbounds(ad, I, J)
-    i, j = Base.reindex(parentindices(ad), (convertidx(I, ad.obs_names), convertidx(J, ad.var_names)))
+    i, j =
+        Base.reindex(parentindices(ad), (convertidx(I, ad.obs_names), convertidx(J, ad.var_names)))
     return view(parent(ad), i, j)
 end
 
