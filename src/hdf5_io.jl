@@ -239,10 +239,10 @@ function write_impl(
 end
 
 write_impl(
-    parent::Union{HDF5.File, HDF5.Group},
+    prt::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
     data::Adjoint{T, SparseMatrixCSC{T, V}} where {T <: Number, V <: Integer},
-) = write_impl(parent, name, parent(data), transposed=true)
+) = write_impl(prt, name, parent(data), transposed=true)
 
 write_impl(
     parent::Union{HDF5.File, HDF5.Group},
