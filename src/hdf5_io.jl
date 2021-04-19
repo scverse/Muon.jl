@@ -31,7 +31,7 @@ end
 function read_matrix(f::HDF5.Dataset)
     mat = read(f)
     if ndims(mat) > 1
-        mat = mat' # transpose for h5py compatibility
+        mat = PermutedDimsArray(mat, ndims(mat):-1:1) # transpose for h5py compatibility
     end
     return mat
 end
@@ -167,11 +167,8 @@ write_impl(
     compress::UInt8=UInt8(9),
 ) = write_impl(parent, name, Int8.(data), extensible=extensible, compress=compress)
 
-write_impl(
-    parent::Union{HDF5.File, HDF5.Group},
-    name::AbstractString,
-    data::SubArray
-) = write_impl(parent, name, copy(data))
+write_impl(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, data::SubArray) =
+    write_impl(parent, name, copy(data))
 
 function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
@@ -181,8 +178,10 @@ function write_impl(
     compress::UInt8=0x9,
 )
     if ndims(data) > 1
-        data = copy(data') # transpose for h5py compatibility
-    end                    # copy because HDF5 apparently can't handle lazy Adjoints
+        data =
+            data isa PermutedDimsArray && typeof(data).parameters[3] == Tuple(ndims(data):-1:1) ?
+            parent(data) : permutedims(data, ndims(data):-1:1) # transpose for h5py compatibility
+    end                                             # copy because HDF5 apparently can't handle lazy Adjoints
 
     if extensible
         dims = (size(data), Tuple(-1 for _ in 1:ndims(data)))

@@ -3,9 +3,11 @@ using Muon, Test
 @testset "Index" begin
     include("index.jl")
 end
-
 @testset "HDF5 backed matrix" begin
     include("backed_matrix.jl")
+end
+@testset "aligned mappings" begin
+    include("alignedmapping.jl")
 end
 @testset "AnnData" begin
     include("anndata.jl")
