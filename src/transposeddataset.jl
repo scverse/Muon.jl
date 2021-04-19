@@ -42,13 +42,14 @@ Base.lastindex(dset::TransposedDataset, d::Int) = size(dset, d)
 HDF5.datatype(dset::TransposedDataset) = datatype(dset.dset)
 Base.read(dset::TransposedDataset) = read_matrix(dset.dset)
 
-Base.getindex(dset::TransposedDataset, i::Integer) = getindex(dset.dset, ndims(dset.dset) - d + 1)
+Base.getindex(dset::TransposedDataset, i::Integer) = getindex(dset.dset, to_indices(dset, (CartesianIndices(dset)[i],)))
 function Base.getindex(dset::TransposedDataset, I::Vararg{<:Integer, N}) where {N}
     mat = getindex(dset.dset, reverse(I)...)
     return ndims(mat) == 1 ? mat : mat'
 end
 function Base.getindex(dset::TransposedDataset{T, N}, I...) where {T, N}
     @boundscheck checkbounds(dset, I...)
+    I = to_indices(dset, I)
     emptydims = Vector{UInt8}()
     for (j, i) in enumerate(I)
         if !(i isa Colon) && isempty(i) # Colon doesn't support isempty
