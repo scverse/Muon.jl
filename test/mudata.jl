@@ -10,7 +10,7 @@ ad = AnnData(X=x)
 y = rand(Float64, (n, d2))
 ad2 = AnnData(X=y)
 
-@test_logs (:warn, warn_msg) md = MuData(mod=Dict("ad1" => ad, "ad2" => ad2))
+md = (@test_logs (:warn, warn_msg) MuData(mod=Dict("ad1" => ad, "ad2" => ad2)))
 
 @testset "create mudata" begin
   @test size(md, 1) == n
