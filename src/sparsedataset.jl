@@ -103,10 +103,7 @@ function Base.getindex(dset::SparseDataset, I::AbstractUnitRange, J::AbstractUni
             append!(newdata, currdata)
         end
     end
-    finalrows, finaldata =
-        length(newrows) > 0 ? (reduce(vcat, newrows), reduce(vcat, newdata)) :
-        (Vector{eltype(newcols)}(), Vector{eltype(newdata)}())
-    mat = SparseMatrixCSC(length(I), length(J), newcols, finalrows, finaldata)
+    mat = SparseMatrixCSC(length(I), length(J), newcols, newrows, newdata)
     return dset.csr ? mat' : mat
 end
 
