@@ -419,7 +419,7 @@ struct MuDataView{Ti, Tj} <: AbstractMuData
     I::Ti
     J::Tj
 
-    mod::Dict{String, <:AnnDataView}
+    mod::FrozenDict{String, <:AnnDataView}
     obs::SubDataFrame
     obs_names::SubIndex{<:AbstractString}
     obsm::StrAlignedMappingView{Tuple{1 => 1}}
@@ -445,7 +445,7 @@ function Base.view(mu::MuData, I, J)
         mu,
         i,
         j,
-        mod, # TODO: use FrozenDict from CompressHashDisplace.jl once https://github.com/Arkoniak/CompressHashDisplace.jl/pull/6 goes in
+        FrozenDict(mod),
         view(mu.obs, i, :),
         view(mu.obs_names, i),
         view(mu.obsm, i),
