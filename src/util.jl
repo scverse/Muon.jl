@@ -112,3 +112,5 @@ Base.summary(io::IO, A::Union{AbstractMuData, AbstractAnnData}) = print(io, summ
 
 Base.firstindex(A::Union{AbstractMuData, AbstractAnnData}, d::Integer) = 1
 Base.lastindex(A::Union{AbstractMuData, AbstractAnnData}, d::Integer) = size(A, d)
+
+Base.copy(d::Union{MuDataView, AnnDataView}) = parent(d)[parentindices(d)...]
