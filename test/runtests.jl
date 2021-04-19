@@ -4,8 +4,8 @@ using Muon, Test
     include("index.jl")
 end
 
-@testset "HDF5 sparse matrix" begin
-    include("sparse_hdf5.jl")
+@testset "HDF5 backed matrix" begin
+    include("backed_matrix.jl")
 end
 @testset "AnnData" begin
     include("anndata.jl")
