@@ -217,6 +217,10 @@ function getadidx(
 )
     J = filter(x -> x > 0x0, ref[I])
     if reduce_memory
+        diff = J[end] - J[1]
+        if abs(diff) + 1 == length(J)
+            return diff >= 0 ? (J[1]:J[end]) : (J[end]:-1:J[1])
+        end
         diffs = unique(J[2:end] .- J[1:(end - 1)])
         if length(diffs) == 1
             return diffs[1] == 1 ? (J[1]:J[end]) : (J[1]:diffs[1]:J[end])
