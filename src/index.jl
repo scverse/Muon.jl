@@ -224,6 +224,8 @@ end
 Base.length(idx::Index) = length(idx.vals)
 Base.size(idx::Index) = (length(idx),)
 Base.values(idx::Index) = idx.vals
+Base.convert(::Type{<:Index}, x::AbstractArray) = Index(x)
+Base.convert(::Type{<:Index}, x::Index) = x
 
 struct SubIndex{T, V, I} <: AbstractIndex{T, V}
     parent::Index{T, V}
