@@ -216,7 +216,7 @@ function getadidx(
     reduce_memory=false,
 )
     J = filter(x -> x > 0x0, ref[I])
-    if reduce_memory
+    if reduce_memory && length(J) > 0
         diff = J[end] - J[1]
         if abs(diff) + 1 == length(J)
             return diff >= 0 ? (J[1]:J[end]) : (J[end]:-1:J[1])
@@ -233,13 +233,13 @@ getadidx(
     ref::AbstractVector{<:Unsigned},
     idx::AbstractIndex{<:AbstractString},
     reduce_memory=false,
-) = getadidx(idx[I, true], ref, idx)
+) = getadidx(idx[I, true], ref, idx, reduce_memory)
 getadidx(
     I::Number,
     ref::AbstractVector{<:Unsigned},
     idx::Index{<:AbstractString},
     reduce_memory=false,
-) = getadidx([I], ref, idx)
+) = getadidx([I], ref, idx, reduce_memory)
 
 function Base.show(io::IO, mdata::AbstractMuData)
     compact = get(io, :compact, false)
@@ -441,14 +441,14 @@ function Base.view(mu::MuData, I, J)
     mod = Dict(
         m => view(
             ad,
-            getadidx(i, mu.obsm[m], mu.obs_names, true),
-            getadidx(j, mu.obsm[m], mu.var_names, true),
+            getadidx(I, mu.obsm[m], mu.obs_names, true),
+            getadidx(J, mu.varm[m], mu.var_names, true),
         ) for (m, ad) in mu.mod
     )
     return MuDataView(
         mu,
-        i,
-        j,
+        I,
+        J,
         FrozenDict(mod),
         view(mu.obs, i, :),
         view(mu.obs_names, i),

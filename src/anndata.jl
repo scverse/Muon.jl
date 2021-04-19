@@ -272,8 +272,8 @@ function Base.view(ad::AnnData, I, J)
 
     return AnnDataView(
         ad,
-        i,
-        j,
+        I,
+        J,
         X,
         view(ad.obs, i, :),
         view(ad.obs_names, i),
