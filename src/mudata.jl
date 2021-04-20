@@ -164,7 +164,7 @@ Base.size(mdata::AbstractMuData, d::Integer) = size(mdata)[d]
 Base.getindex(mdata::AbstractMuData, modality::Symbol) = mdata.mod[String(modality)]
 Base.getindex(mdata::AbstractMuData, modality::AbstractString) = mdata.mod[modality]
 function Base.getindex(
-    mdata::AbstractMuData,
+    mdata::MuData,
     I::Union{
         AbstractRange,
         Colon,
@@ -465,6 +465,13 @@ function Base.view(mu::MuDataView, I, J)
     i, j =
         Base.reindex(parentindices(mu), (convertidx(I, mu.obs_names), convertidx(J, mu.var_names)))
     return view(parent(mu), i, j)
+end
+
+function Base.getindex(mu::MuDataView, I, J)
+    @boundscheck checkbounds(mu, I, J)
+    i, j =
+        Base.reindex(parentindices(mu), (convertidx(I, mu.obs_names), convertidx(J, mu.var_names)))
+    return getindex(parent(mu), i, j)
 end
 
 Base.parent(mu::MuDataView) = mu.parent
