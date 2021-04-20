@@ -16,7 +16,7 @@ on:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   # This workflow contains a single job called "build"
-  build:
+  test:
     # The type of runner that the job will run on
     runs-on: ${{ matrix.os }}
     strategy:
@@ -35,6 +35,23 @@ jobs:
         with:
           version: ${{ matrix.julia-version }}
 
-      # Runs a single command using the runners shell
-      - name: Run runtests.jl
-        run: julia --color=yes --check-bounds=yes --inline=yes --depwarn=yes --project=@. -e 'using Pkg; Pkg.test(coverage=true)'
+      # Cache binary artifacts
+      - uses: actions/cache@v2
+        env:
+          cache-name: cache-artifacts
+        with:
+          path: |
+            ~/.julia/artifacts
+            ~/.julia/packages
+            ~/.julia/registries
+          key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('**/Project.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-test-${{ env.cache-name }}-
+            ${{ runner.os }}-test-
+            ${{ runner.os }}-
+
+      # run unit tests
+      - name: "run unit tests"
+        uses: julia-actions/julia-runtest@v1
+        with:
+          coverage: false
