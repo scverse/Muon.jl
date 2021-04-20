@@ -17,10 +17,10 @@ function test_row_slice(ad, i1, n, d, x)
 end
 
 function test_ad_slicing(ad, n, d, x)
-    for i in 2:n
+    @testset "row slice $(1:i)" for i in 2:n
         test_row_slice(ad, 1:i, n, d, x)
     end
-    for i in 1:(n - 1)
+    @testset "row slice $(i:(i + 1))" for i in 1:(n - 1)
         test_row_slice(ad, i:(i + 1), n, d, x)
     end
 end

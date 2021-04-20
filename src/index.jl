@@ -168,10 +168,10 @@ Base.getindex(idx::AbstractIndex{T}, elems::AbstractVector{T}) where {T} =
 Base.getindex(idx::AbstractIndex{T}, elems::AbstractVector{T}, x::Bool) where {T} =
     getindex(idx, elems, Val(x))
 Base.getindex(
-    idx::AbstractIndex{T},
+    idx::AbstractIndex{T, V},
     elems::AbstractVector{T},
     x::Union{Val{true}, Val{false}},
-) where {T} = reduce(vcat, (getindex(idx, elem, x) for elem in elems))
+) where {T, V} = isempty(elems) ? V[] : reduce(vcat, (getindex(idx, elem, x) for elem in elems))
 Base.in(elem::T, idx::AbstractIndex{T}) where {T} =
     getindex(idx, elem, Val(false), Val(false)) != 0x0
 
@@ -232,8 +232,7 @@ struct SubIndex{T, V, I} <: AbstractIndex{T, V}
     indices::I
     revmapping::Union{Nothing, Index}
 end
-SubIndex(idx::Index{T, V}, indices::I) where {T, V, I} =
-    SubIndex{T, V, I}(idx, indices, nothing)
+SubIndex(idx::Index{T, V}, indices::I) where {T, V, I} = SubIndex{T, V, I}(idx, indices, nothing)
 
 function Base.view(idx::Index, I::AbstractRange)
     @boundscheck checkbounds(idx, I)
@@ -289,7 +288,12 @@ function Base.getindex(
 
     return res
 end
-function Base.getindex(si::SubIndex{T, V, I}, elem::T, ::Val{true}, ::Val{false}) where {T, V, I <: AbstractArray{<:Integer}}
+function Base.getindex(
+    si::SubIndex{T, V, I},
+    elem::T,
+    ::Val{true},
+    ::Val{false},
+) where {T, V, I <: AbstractArray{<:Integer}}
     res = getindex(parent(si), elem, Val(true), Val(false))
     i = 0
     @inbounds for r in res
@@ -299,15 +303,31 @@ function Base.getindex(si::SubIndex{T, V, I}, elem::T, ::Val{true}, ::Val{false}
             res[i] = position
         end
     end
-    resize!(res, i)
-    return res
+    return resize!(res, i)
+end
+function Base.getindex(
+    si::SubIndex{T, V, I},
+    elem::T,
+    ::Val{true},
+    ::Val{false},
+) where {T, V, I <: AbstractRange}
+    res = getindex(parent(si), elem, Val(true), Val(false))
+    j = 0
+    for i in length(res)
+        pos = findfirst(==(res[i]), parentindices(si))
+        if !isnothing(pos)
+            j += 1
+            res[j] = pos
+        end
+    end
+    return resize!(res, j)
 end
 function Base.getindex(si::SubIndex{T}, elem::T, ::Val{true}) where {T}
     res = getindex(si, elem, Val(true), Val(false))
     if length(res) == 0
         throw(KeyError(elem))
     end
-    return @inbounds parentindices(si)[res]
+    return res
 end
 
 function Base.getindex(si::SubIndex{T, V}, elem::T, ::Val{false}, ::Val{false}) where {T, V}
@@ -335,6 +355,20 @@ function Base.getindex(
 ) where {T, V, I <: AbstractArray{<:Integer}}
     res = getindex(parent(si), elem, Val(false), Val(false))
     return res > 0x0 ? si.revmapping[res, false, false] : res
+end
+function Base.getindex(
+    si::SubIndex{T, V, I},
+    elem::T,
+    ::Val{false},
+    ::Val{false},
+) where {T, V, I <: AbstractRange}
+    res = getindex(parent(si), elem, Val(false), Val(false))
+    if res > 0x0
+        i = findfirst(==(res), parentindices(si))
+        return isnothing(i) ? 0x0 : i
+    else
+        return 0x0
+    end
 end
 function Base.getindex(si::SubIndex{T}, elem::T, ::Val{false}) where {T}
     res = getindex(si, elem, Val(false), Val(false))
@@ -375,7 +409,11 @@ function Base.setindex!(
     @inbounds parent(si)[oldidx[1]] = newval
     return si
 end
-function Base.setindex!(si::SubIndex{T, V, I}, newval::T, oldval::T) where {T, V, I <: AbstractArray{<:Integer}}
+function Base.setindex!(
+    si::SubIndex{T, V, I},
+    newval::T,
+    oldval::T,
+) where {T, V, I <: AbstractArray{<:Integer}}
     oldidx = parent(si)[oldval, true]
     foldidx = findfirst(in(si.revmapping), oldidx)
     if isnothing(foldidx)

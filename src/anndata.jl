@@ -272,8 +272,8 @@ function Base.view(ad::AnnData, I, J)
 
     return AnnDataView(
         ad,
-        I,
-        J,
+        i,
+        j,
         X,
         view(ad.obs, nrow(ad.obs) > 0 ? i : (:), :),
         view(ad.obs_names, i),
@@ -301,6 +301,8 @@ function Base.getproperty(ad::AnnDataView, s::Symbol)
     end
 end
 
+Base.parent(ad::AnnData) = ad
 Base.parent(ad::AnnDataView) = ad.parent
+Base.parentindices(ad::AnnData) = axes(ad)
 Base.parentindices(ad::AnnDataView) = (ad.I, ad.J)
 file(ad::AnnDataView) = file(parent(ad))

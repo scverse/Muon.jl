@@ -50,9 +50,7 @@ mutable struct MuData <: AbstractMuData
             mdata.mod[modality] = AnnData(file["mod"][modality], backed)
         end
 
-        _update_attr!(mdata, :var, 0, true)
-        _update_attr!(mdata, :obs, 1)
-        return mdata
+        return update!(mdata)
     end
 
     function MuData(;
@@ -71,6 +69,7 @@ mutable struct MuData <: AbstractMuData
         }=nothing,
         obsp::Union{AbstractDict{<:AbstractString, AbstractMatrix{<:Number}}, Nothing}=nothing,
         varp::Union{AbstractDict{<:AbstractString, AbstractMatrix <: Number}, Nothing}=nothing,
+        do_update=true,
     )
         mdata = new(nothing, Dict{String, AnnData}())
         if !isnothing(mod)
@@ -87,8 +86,9 @@ mutable struct MuData <: AbstractMuData
         mdata.obsp = StrAlignedMapping{Tuple{1 => 1, 2 => 1}}(mdata, obsp)
         mdata.varp = StrAlignedMapping{Tuple{1 => 2, 2 => 2}}(mdata, varp)
 
-        _update_attr!(mdata, :var, 0, true)
-        _update_attr!(mdata, :obs, 1)
+        if do_update
+            update!(mdata)
+        end
         return mdata
     end
 end
@@ -195,11 +195,22 @@ function Base.getindex(
         obs_names=mdata.obs_names[i],
         var=isempty(mdata.var) ? nothing : mdata.var[j, :],
         var_names=mdata.var_names[j],
+        do_update=false,
     )
     copy_subset(mdata.obsm, newmu.obsm, i, j)
     copy_subset(mdata.varm, newmu.varm, i, j)
     copy_subset(mdata.obsp, newmu.obsp, i, j)
     copy_subset(mdata.varp, newmu.varp, i, j)
+
+    for mapping in (newmu.obsm, newmu.varm)
+        minval = maximum(size(mdata))
+        for mod in values(mapping)
+            minval = min(minval, minimum(mod))
+        end
+        for mod in values(mapping)
+            mod .-= eltype(mod)(minval) .- 0x1
+        end
+    end
     return newmu
 end
 
@@ -215,7 +226,7 @@ function getadidx(
     idx::AbstractIndex{<:AbstractString},
     reduce_memory=false,
 )
-    J = filter(x -> x > 0x0, ref[I])
+    J = filter(>(0x0), ref[I])
     if reduce_memory && length(J) > 0
         diff = J[end] - J[1]
         if abs(diff) + 1 == length(J)
@@ -400,7 +411,7 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
         end
     end
 
-    nothing
+    return mdata
 end
 
 update_obs!(mdata::MuData) = _update_attr!(mdata, :obs, 1)
@@ -408,6 +419,7 @@ update_var!(mdata::MuData) = _update_attr!(mdata, :var, 0, true)
 function update!(mdata::MuData)
     update_obs!(mdata)
     update_var!(mdata)
+    return mdata
 end
 
 function shrink_attr(mdata::AbstractMuData, attr::Symbol)
@@ -447,14 +459,14 @@ function Base.view(mu::MuData, I, J)
     )
     return MuDataView(
         mu,
-        I,
-        J,
+        i,
+        j,
         FrozenDict(mod),
-        view(mu.obs, i, :),
+        view(mu.obs, nrow(mu.obs) > 0 ? i : (:), :),
         view(mu.obs_names, i),
         view(mu.obsm, i),
         view(mu.obsp, i, i),
-        view(mu.var, j, :),
+        view(mu.var, nrow(mu.var) > 0 ? j : (:), :),
         view(mu.var_names, j),
         view(mu.varm, j),
         view(mu.varp, j, j),
@@ -474,6 +486,8 @@ function Base.getindex(mu::MuDataView, I, J)
     return getindex(parent(mu), i, j)
 end
 
+Base.parent(mu::MuData) = mu
 Base.parent(mu::MuDataView) = mu.parent
+Base.parentindices(mu::MuData) = axes(mu)
 Base.parentindices(mu::MuDataView) = (mu.I, mu.J)
 file(mu::MuDataView) = file(parent(mu))
