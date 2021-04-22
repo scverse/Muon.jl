@@ -60,14 +60,14 @@ expected_n = 102
     @test size(md, 2) == d1 + d2
     @test sort(names(md.var)) == ["ad1:testcol", "commoncol", "mutestcol"]
 
-    ad1, ad2, _ = make_ads()
-    ad1.obs = DataFrame(demo=[1 for i in 1:size(ad1, 1)])
-    ad2.obs = DataFrame(demo=[2 for i in 1:size(ad2, 1)])
-    ad2.obs_names = copy(ad1.obs_names)
-    md = (@test_logs (:warn, warn_msg) MuData(mod=Dict("ad1" => ad1, "ad2" => ad2)))
-    md.obs[!, "demo"] .= "common"
-    @test_logs (:warn, warn_msg) update!(md)
-    @test sort(names(md.obs)) == ["ad1:demo", "ad2:demo", "demo"]
+    a1, a2, _ = make_ads()
+    a1.obs = DataFrame(demo=[1 for i in 1:size(ad1, 1)])
+    a2.obs = DataFrame(demo=[2 for i in 1:size(ad2, 1)])
+    a2.obs_names = copy(a1.obs_names)
+    m = (@test_logs (:warn, warn_msg) MuData(mod=Dict("ad1" => a1, "ad2" => a2)))
+    m.obs[!, "demo"] .= "common"
+    @test_logs (:warn, warn_msg) update!(m)
+    @test sort(names(m.obs)) == ["ad1:demo", "ad2:demo", "demo"]
 end
 
 @testset "insert new AnnData" begin
@@ -118,7 +118,7 @@ function test_md_slicing(md, n, d, j=:)
     end
 end
 
-ad1, ad2 = make_ads()
+ad1, ad2, _ = make_ads()
 md = (@test_logs (:warn, warn_msg) MuData(mod=Dict("ad1" => ad1, "ad2" => ad2)))
 md.var[!, :mutestcol] = rand(size(md, 2))
 md.obsm["mdtest"] = rand(size(md, 1), 5, 3)
