@@ -255,6 +255,7 @@ function Base.view(idx::SubIndex, I)
     return @inbounds view(parent(idx), Base.reindex((parentindices(idx),), (I,))[1])
 end
 
+Base.copy(si::SubIndex) = Index(si)
 Base.parent(si::SubIndex) = si.parent
 Base.parentindices(si::SubIndex) = si.indices
 Base.length(si::SubIndex) = length(parentindices(si))
@@ -313,7 +314,7 @@ function Base.getindex(
 ) where {T, V, I <: AbstractRange}
     res = getindex(parent(si), elem, Val(true), Val(false))
     j = 0
-    for i in length(res)
+    for i in 1:length(res)
         pos = findfirst(==(res[i]), parentindices(si))
         if !isnothing(pos)
             j += 1

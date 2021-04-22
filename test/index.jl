@@ -51,12 +51,27 @@ end
 end
 
 @testset "duplicates" begin
-    idx = Muon.Index(["test1", "test2", "test3", "test4", "test1", "test6"])
-    @test idx["test1"] ∈ (1, 5)
-    @test sort(idx["test1", true]) == [1, 5]
-    idx[5] = "test5"
-    @test idx[1] == "test1"
-    @test idx[5] == "test5"
-    idx[5] = "test2"
-    @test idx[5] == "test2"
+    dupidx = Muon.Index(["test1", "test2", "test3", "test4", "test1", "test6"])
+    @test dupidx["test1"] ∈ (1, 5)
+    @test sort(dupidx["test1", true]) == [1, 5]
+    dupidx[5] = "test5"
+    @test dupidx[1] == "test1"
+    @test dupidx[5] == "test5"
+    dupidx[5] = "test2"
+    @test dupidx[5] == "test2"
+end
+
+@testset "views" begin
+    subidx1, subidx2 = @view(idx[26:75]), @view(idx[collect(26:75)])
+    subidx3 = copy(subidx1)
+    @test subidx1 == subidx2 == subidx3 == idx[26:75]
+    @test subidx1[3:5] == subidx2[3:5] == subidx3[3:5] == idx[28:30]
+    @test subidx1[idx[27]] == subidx2[idx[27]] == subidx3[idx[27]] == 2
+    @test subidx1[idx[27], true] == subidx2[idx[27], true] == subidx3[idx[27], true] == [2]
+    @test_throws KeyError subidx1["a"]
+    @test_throws KeyError subidx2["a"]
+    @test_throws KeyError subidx3["a"]
+    @test subidx1["a", false, false] == subidx2["a", false, false] == subidx3["a", false, false] == 0
+    @test subidx1["a", true, false] == subidx2["a", true, false] == subidx3["a", true, false] == []
+    @test @view(subidx1[3:5]) == @view(subidx2[3:5]) == @view(subidx3[3:5]) == idx[28:30]
 end
