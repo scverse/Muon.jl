@@ -60,15 +60,15 @@ mutable struct MuData <: AbstractMuData
         var::Union{DataFrame, Nothing}=nothing,
         var_names::Union{AbstractVector{<:AbstractString}, Nothing}=nothing,
         obsm::Union{
-            AbstractDict{<:AbstractString, Union{AbstractArray{<:Number}, DataFrame}},
+            AbstractDict{<:AbstractString, <:Union{<:AbstractArray{<:Number}, DataFrame}},
             Nothing,
         }=nothing,
         varm::Union{
-            AbstractDict{<:AbstractString, Union{AbstractArray{<:Number}, DataFrame}},
+            AbstractDict{<:AbstractString, <:Union{<:AbstractArray{<:Number}, DataFrame}},
             Nothing,
         }=nothing,
-        obsp::Union{AbstractDict{<:AbstractString, AbstractMatrix{<:Number}}, Nothing}=nothing,
-        varp::Union{AbstractDict{<:AbstractString, AbstractMatrix <: Number}, Nothing}=nothing,
+        obsp::Union{AbstractDict{<:AbstractString, <:AbstractMatrix{<:Number}}, Nothing}=nothing,
+        varp::Union{AbstractDict{<:AbstractString, <:AbstractMatrix{<:Number}}, Nothing}=nothing,
         do_update=true,
     )
         mdata = new(nothing, Dict{String, AnnData}())
@@ -161,8 +161,10 @@ end
 Base.size(mdata::AbstractMuData) = (length(mdata.obs_names), length(mdata.var_names))
 Base.size(mdata::AbstractMuData, d::Integer) = size(mdata)[d]
 
-Base.getindex(mdata::AbstractMuData, modality::Symbol) = mdata.mod[String(modality)]
+Base.getindex(mdata::AbstractMuData, modality::Symbol) = mdata.mod[string(modality)]
 Base.getindex(mdata::AbstractMuData, modality::AbstractString) = mdata.mod[modality]
+Base.setindex!(mdata::MuData, ad::AnnData, key::AbstractString) = setindex!(mdata.mod, ad, key)
+Base.setindex!(mdata::MuData, ad::AnnData, key::Symbol) = setindex!(mdata.mod, ad, string(key))
 function Base.getindex(
     mdata::MuData,
     I::Union{
@@ -204,11 +206,11 @@ function Base.getindex(
 
     for mapping in (newmu.obsm, newmu.varm)
         minval = maximum(size(mdata))
-        for mod in values(mapping)
-            minval = min(minval, minimum(mod))
+        for mod in keys(mdata.mod)
+            minval = min(minval, minimum(mapping[mod]))
         end
-        for mod in values(mapping)
-            mod .-= eltype(mod)(minval) .- 0x1
+        for mod in keys(mdata.mod)
+            mapping[mod] .-= eltype(mapping[mod])(minval) .- 0x1
         end
     end
     return newmu
@@ -273,9 +275,17 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
     ]
     globaldata = getproperty(mdata, attr)[!, globalcols]
     namesattr = Symbol(string(attr) * "_names")
+    mattr = Symbol(string(attr) * "m")
     old_rownames = getproperty(mdata, namesattr)
 
     idxcol, rowcol, dupidxcol = find_unique_colnames(mdata, attr, 3)
+
+    globaljoincols = Vector{String}()
+    for mod in intersect(keys(getproperty(mdata, mattr)), keys(mdata.mod))
+        colname = mod * ":" * rowcol
+        globaldata[!, colname] = getproperty(mdata, mattr)[mod]
+        push!(globaljoincols, colname)
+    end
 
     if join_common &&
        length(mdata.mod) > 1 &&
@@ -294,7 +304,7 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
             unique(getproperty(mdata.mod[mod], namesattr)[dups .> 0]) .∈
             (getproperty(ad, namesattr),),
         )
-            @warn "Duplicated $(string(namesattr)) should not be present in different modalities due to the ambiguitiy that leads to."
+            @warn "Duplicated $(string(namesattr)) should not be present in different modalities due to the ambiguity that leads to."
             break
         end
     end
@@ -348,20 +358,24 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
             end
         elseif length(mdata.mod) == 1
             mod, ad = iterate(mdata.mod)[1]
-            newdf = insertcols!(
+            data_mod = insertcols!(
                 rename!(x -> mod * ":" * x, select(getproperty(ad, attr), :, copycols=false)),
                 idxcol => getproperty(ad, namesattr),
+                dupidxcol => 0,
                 mod * ":" * rowcol => 1:length(getproperty(ad, namesattr)),
             )
+        end
+
+        for col in globaljoincols
+            data_mod[!, col] = coalesce.(data_mod[!, col], 0x0)
         end
         data_mod = leftjoin(
             data_mod,
             insertcols!(
                 globaldata,
                 idxcol => old_rownames,
-                dupidxcol => index_duplicates(old_rownames),
             ),
-            on=[idxcol, dupidxcol],
+            on=[idxcol, globaljoincols...],
         )
         rownames = data_mod[!, idxcol]
         select!(data_mod, Not([idxcol, dupidxcol]))
@@ -382,18 +396,17 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
         rownames = Vector{String}()
     end
 
-    setproperty!(mdata, attr, data_mod)
     setproperty!(mdata, namesattr, Index(rownames))
-
-    mattr = Symbol(string(attr) * "m")
     for (mod, ad) in mdata.mod
         colname = mod * ":" * rowcol
         adindices = data_mod[!, colname]
         select!(data_mod, Not(colname))
-        replace!(adindices, missing => 0)
+        replace!(adindices, missing => 0x0)
         getproperty(mdata, mattr)[mod] =
             convert(Vector{minimum_unsigned_type_for_n(maximum(adindices))}, adindices)
     end
+    setproperty!(mdata, attr, disallowmissing!(data_mod, error=false))
+
 
     keep_index = rownames .∈ (old_rownames,)
     @inbounds if sum(keep_index) != length(old_rownames)

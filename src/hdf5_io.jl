@@ -66,7 +66,7 @@ function read_matrix(f::HDF5.Group)
 end
 
 function read_dict_of_matrices(f::HDF5.Group)
-    return Dict(key => read_matrix(f[key]) for key in keys(f))
+    return Dict{String, AbstractArray{<:Number}}(key => read_matrix(f[key]) for key in keys(f))
 end
 
 read_auto(f::HDF5.Dataset) = (read_matrix(f), nothing)
@@ -82,7 +82,7 @@ function read_auto(f::HDF5.Group)
 end
 
 function read_dict_of_mixed(f::HDF5.Group)
-    ret = Dict{String, Any}()
+    ret = Dict{String, Union{DataFrame, AbstractArray{<:Number}}}()
     for k in keys(f)
         ret[k] = read_auto(f[k])[1] # assume data frames are properly aligned, so we can discard rownames
     end
@@ -99,11 +99,13 @@ end
 function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
-    data::AbstractDict{String, <:Any},
+    data::AbstractDict{<:AbstractString, <:Any},
 )
-    g = create_group(parent, name)
-    for (key, val) in data
-        write_impl(g, key, val)
+    if length(data) > 0
+        g = create_group(parent, name)
+        for (key, val) in data
+            write_impl(g, key, val)
+        end
     end
 end
 

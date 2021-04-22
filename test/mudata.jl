@@ -1,38 +1,96 @@
+using DataFrames
+using HDF5
+
 n = 100
 d1 = 10
 d2 = 20
 
 warn_msg = "Cannot join columns with the same name because var_names are intersecting."
-obs_names = ["obs_$i" for i in 1:n]
-x = rand(Float64, (n, d1))
-ad = AnnData(X=x, obs_names=copy(obs_names))
+warn_msg2 = "Duplicated obs_names should not be present in different modalities due to the ambiguity that leads to."
 
-obs_names[10] = "testobs"
-obs_names[n] = "testobs"
+function make_ads()
+    obs_names = ["obs_$i" for i in 1:n]
+    ad1 = AnnData(
+        X=rand(n, d1),
+        obs_names=copy(obs_names),
+        var=DataFrame(testcol=["ad1_$i" for i in 1:d1]),
+    )
+
+    obs_names[10] = obs_names[n] = "testobs"
+    ad2 = AnnData(
+        X=rand(n, d2),
+        obs_names=copy(obs_names),
+        layers=Dict("testlayer" => rand(UInt16, n, d2)),
+        varm=Dict("test" => rand(Int8, d2, 5, 2, 10)),
+    )
+
+    obs_names[10] = "obs_10"
+    ad3 = AnnData(
+        X=rand(n, d1),
+        obs_names=copy(obs_names),
+        var=DataFrame(commoncol=(d1 + 1):(2d1), ad3col=1:d1),
+    )
+    return ad1, ad2, ad3
+end
+
+ad1, ad2, ad3 = make_ads()
 expected_n = 102
 
-y = rand(Float64, (n, d2))
-ad2 = AnnData(X=y, obs_names=obs_names)
-
-md = (@test_logs (:warn, warn_msg) MuData(mod=Dict("ad1" => ad, "ad2" => ad2)))
-
 @testset "create mudata" begin
+    md_single = MuData(mod=Dict("ad1" => ad1))
+    global md = (@test_logs (:warn, warn_msg) MuData(mod=Dict("ad1" => ad1, "ad2" => ad2)))
+    md.var[!, :mutestcol] = rand(size(md, 2))
+    md.obsm["mdtest"] = rand(size(md, 1), 5, 3)
+
     @test size(md, 1) == expected_n
     @test size(md, 2) == d1 + d2
 
     modalities = sort(collect(keys(md.mod)))
     @test modalities == ["ad1", "ad2"]
+
+    ad1.var[!, :commoncol] = ["ad1_$i" for i in 1:size(ad1, 2)]
+    ad1.var_names = ["ad1_$i" for i in 1:size(ad1, 2)]
+    ad2.var[!, :commoncol] = ["ad2_$i" for i in 1:size(ad2, 2)]
+    ad2.var_names = ["ad2_$i" for i in 1:size(ad2, 2)]
+    md = MuData(mod=Dict("ad1" => ad1, "ad2" => ad2))
+    md.var[!, :mutestcol] = rand(size(md, 2))
+    md.obsm["mdtest"] = rand(size(md, 1), 5, 3)
+
+    @test size(md, 1) == expected_n
+    @test size(md, 2) == d1 + d2
+    @test sort(names(md.var)) == ["ad1:testcol", "commoncol", "mutestcol"]
+
+    ad1, ad2, _ = make_ads()
+    ad1.obs = DataFrame(demo=[1 for i in 1:size(ad1, 1)])
+    ad2.obs = DataFrame(demo=[2 for i in 1:size(ad2, 1)])
+    ad2.obs_names = copy(ad1.obs_names)
+    md = (@test_logs (:warn, warn_msg) MuData(mod=Dict("ad1" => ad1, "ad2" => ad2)))
+    md.obs[!, "demo"] .= "common"
+    @test_logs (:warn, warn_msg) update!(md)
+    @test sort(names(md.obs)) == ["ad1:demo", "ad2:demo", "demo"]
+end
+
+@testset "insert new AnnData" begin
+    ad2.var[!, :testcol] = ["ad2_$i" for i in 1:size(ad2, 2)]
+    update!(md)
+    @test sort(names(md.var)) == ["commoncol", "mutestcol", "testcol"]
+
+    md["ad3"] = ad3
+    @test_logs (:warn, warn_msg2) update!(md)
+    @test sort(names(md.var)) ==
+          ["ad1:testcol", "ad2:testcol", "ad3:ad3col", "commoncol", "mutestcol", "testcol"]
+    @test !any(ismissing.(md.var.commoncol))
+    @test sum(ismissing.(md.var.mutestcol[md.varm["ad1"] .> 0x0])) ==
+          sum(ismissing.(md.var.mutestcol[md.varm["ad2"] .> 0x0])) ==
+          0
+    @test all(ismissing.(md.var.mutestcol[md.varm["ad3"] .> 0x0]))
 end
 
 function test_row_slice(md, i1, n, d, j=:)
     md1, md2, md3, md4 =
         md[i1, :], md[collect(i1), :], md[unique(md.obs_names[i1]), :], md[1:n .∈ (i1,), :]
 
-    @test size(md1) ==
-          size(md2) ==
-          size(md4) ==
-          (length(i1), d) ==
-          size(@test_logs (:warn, warn_msg) MuData(mod=md1.mod))
+    @test size(md1) == size(md2) == size(md4) == (length(i1), d) == size(@test_logs (:warn, warn_msg) MuData(mod=md1.mod))
     @test size(md3) == (length(md.obs_names[unique(md.obs_names[i1]), true]), d)
     @test md1.obs_names == md2.obs_names == md4.obs_names == md.obs_names[i1]
     @test sort(unique(md3.obs_names)) == sort(unique(md.obs_names[i1]))
@@ -60,6 +118,11 @@ function test_md_slicing(md, n, d, j=:)
     end
 end
 
+ad1, ad2 = make_ads()
+md = (@test_logs (:warn, warn_msg) MuData(mod=Dict("ad1" => ad1, "ad2" => ad2)))
+md.var[!, :mutestcol] = rand(size(md, 2))
+md.obsm["mdtest"] = rand(size(md, 1), 5, 3)
+
 @testset "slicing mudata" begin
     test_md_slicing(md, expected_n, d1 + d2)
 end
@@ -79,4 +142,40 @@ end
     end
     test_md_slicing(submd, 50, 10, j)
     test_md_slicing(mdview, 50, 10, j)
+end
+
+@testset "readwrite" begin
+    tmp = mktempdir()
+    tempfile1 = joinpath(tmp, "tmp1.h5mu")
+    writeh5mu(tempfile1, md)
+    read_md = (@test_logs (:warn, warn_msg) readh5mu(tempfile1, backed=false))
+    read_md_backed = (@test_logs (:warn, warn_msg) readh5mu(tempfile1, backed=true))
+
+    @test size(md) == size(read_md) == size(read_md_backed)
+    @test md.obs_names == read_md.obs_names == read_md_backed.obs_names
+    @test md.var_names == read_md.var_names == read_md_backed.var_names
+    @test isequal(md.var, read_md.var)
+    @test isequal(md.var, read_md_backed.var)
+    @test isequal(md.obs, read_md.obs)
+    @test isequal(md.obs, read_md_backed.obs)
+    @test md["ad1"].X == read_md["ad1"].X == read_md_backed["ad1"].X
+    @test md["ad2"].X == read_md["ad2"].X == read_md_backed["ad2"].X
+    @test md["ad1"].var == read_md["ad1"].var == read_md_backed["ad1"].var
+    @test md["ad2"].var == read_md["ad2"].var == read_md_backed["ad2"].var
+    @test md["ad2"].varm == read_md["ad2"].varm == read_md_backed["ad2"].varm
+    @test md["ad2"].layers == read_md["ad2"].layers == read_md_backed["ad2"].layers
+
+    md["ad3"] = ad3
+    tempfile2 = joinpath(tmp, "tmp2.h5mu")
+    writeh5mu(tempfile2, md)
+    @test_logs (:warn, warn_msg2) (:warn, warn_msg) update!(md)
+    read_md = (@test_logs (:warn, warn_msg2) (:warn, warn_msg) readh5mu(tempfile2, backed=false))
+    read_md_backed = (@test_logs (:warn, warn_msg2) (:warn, warn_msg) readh5mu(tempfile2, backed=true))
+    @test size(md) == size(read_md) == size(read_md_backed)
+    @test md.obs_names == read_md.obs_names == read_md_backed.obs_names
+    @test md.var_names == read_md.var_names == read_md_backed.var_names
+    @test isequal(md.var, read_md.var)
+    @test isequal(md.var, read_md_backed.var)
+    @test isequal(md.obs, read_md.obs)
+    @test isequal(md.obs, read_md_backed.obs)
 end

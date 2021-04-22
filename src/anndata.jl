@@ -72,16 +72,16 @@ mutable struct AnnData <: AbstractAnnData
         var::Union{DataFrame, Nothing}=nothing,
         var_names::Union{AbstractVector{<:AbstractString}, Nothing}=nothing,
         obsm::Union{
-            AbstractDict{<:AbstractString, Union{AbstractArray{<:Number}, DataFrame}},
+            AbstractDict{<:AbstractString, <:Union{<:AbstractArray{<:Number}, DataFrame}},
             Nothing,
         }=nothing,
         varm::Union{
-            AbstractDict{<:AbstractString, Union{AbstractArray{<:Number}, DataFrame}},
+            AbstractDict{<:AbstractString, <:Union{<:AbstractArray{<:Number}, DataFrame}},
             Nothing,
         }=nothing,
-        obsp::Union{AbstractDict{<:AbstractString, AbstractMatrix{<:Number}}, Nothing}=nothing,
-        varp::Union{AbstractDict{<:AbstractString, AbstractMatrix{<:Number}}, Nothing}=nothing,
-        layers::Union{AbstractDict{<:AbstractString, AbstractMatrix{<:Number}}, Nothing}=nothing,
+        obsp::Union{AbstractDict{<:AbstractString, <:AbstractMatrix{<:Number}}, Nothing}=nothing,
+        varp::Union{AbstractDict{<:AbstractString, <:AbstractMatrix{<:Number}}, Nothing}=nothing,
+        layers::Union{AbstractDict{<:AbstractString, <:AbstractMatrix{<:Number}}, Nothing}=nothing,
     )
         m, n = size(X)
         if isnothing(obs)

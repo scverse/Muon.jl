@@ -47,7 +47,7 @@ function find_unique_colnames(mdata::MuData, property::Symbol, ncols::Int)
     return colnames
 end
 
-function index_duplicates(idx::Index{T}) where T
+function index_duplicates(idx::AbstractArray{T}) where T
     counter = Dict{T, UInt8}()
     dup_idx = Vector{UInt8}(undef, length(idx))
     for (i, val) in enumerate(idx)
