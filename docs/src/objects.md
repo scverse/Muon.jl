@@ -73,10 +73,21 @@ ad2 = AnnData(X=rand(Binomial(1, 0.3), (10, 7)),
 md = MuData(mod=Dict("view_rand" => ad, "view_binom" => ad2))
 ```
 
+Features are considered unique to each modality.
+
 ### Slicing MuData objects
 
 Slicing now works across all modalities:
 
 ```@example 1
 md[["obs_1", "obs_9"],:]
+```
+
+### Multimodal annotation
+
+We can store annotation at the multimodal level, that includes multidimensional arrays:
+
+```@example 1
+md.obsm["X_svd"] = f.U * Diagonal(f.S);
+md.obsm
 ```
