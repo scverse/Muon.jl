@@ -80,10 +80,10 @@ end
     @test sort(names(md.var)) ==
           ["ad1:testcol", "ad2:testcol", "ad3:ad3col", "commoncol", "mutestcol", "testcol"]
     @test !any(ismissing.(md.var.commoncol))
-    @test sum(ismissing.(md.var.mutestcol[md.varm["ad1"] .> 0x0])) ==
-          sum(ismissing.(md.var.mutestcol[md.varm["ad2"] .> 0x0])) ==
+    @test sum(ismissing.(md.var.mutestcol[md.varm["ad1"]])) ==
+          sum(ismissing.(md.var.mutestcol[md.varm["ad2"]])) ==
           0
-    @test all(ismissing.(md.var.mutestcol[md.varm["ad3"] .> 0x0]))
+    @test all(ismissing.(md.var.mutestcol[md.varm["ad3"]]))
 end
 
 function test_row_slice(md, i1, n, d, j=:)
@@ -98,8 +98,8 @@ function test_row_slice(md, i1, n, d, j=:)
     ad1_names = filter(in(md["ad1"].obs_names), md.obs_names[i1])
     ad2_names = filter(in(md["ad2"].obs_names), md.obs_names[i1])
 
-    ad1_idx = filter(>(0x0), md.obsm["ad1"][i1])
-    ad2_idx = filter(>(0x0), md.obsm["ad2"][i1])
+    ad1_idx = filter(>(0x0), md.obsmap["ad1"][i1])
+    ad2_idx = filter(>(0x0), md.obsmap["ad2"][i1])
 
     ad1, ad2 = parent(md["ad1"])[ad1_idx, j], parent(md["ad2"])[ad2_idx, j]
 

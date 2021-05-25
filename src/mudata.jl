@@ -34,7 +34,10 @@ mutable struct MuData <: AbstractMuData
             mdata,
             haskey(file, "obsp") ? read_dict_of_matrices(file["obsp"]) : nothing,
         )
-        mdata.obsmap = StrAlignedMapping{Tuple{1 => 1}}(mdata, haskey(file, "obsmap") ? read_dict_of_matrices(file["obsmap"]) : nothing)
+        mdata.obsmap = StrAlignedMapping{Tuple{1 => 1}}(
+            mdata,
+            haskey(file, "obsmap") ? read_dict_of_matrices(file["obsmap"]) : nothing,
+        )
 
         # Variables
         mdata.varm = StrAlignedMapping{Tuple{1 => 2}}(
@@ -45,7 +48,10 @@ mutable struct MuData <: AbstractMuData
             mdata,
             haskey(file, "varp") ? read_dict_of_matrices(file["varp"]) : nothing,
         )
-        mdata.varmap = StrAlignedMapping{Tuple{1 => 2}}(mdata, haskey(file, "varmap") ? read_dict_of_matrices(file["varmap"]) : nothing)
+        mdata.varmap = StrAlignedMapping{Tuple{1 => 2}}(
+            mdata,
+            haskey(file, "varmap") ? read_dict_of_matrices(file["varmap"]) : nothing,
+        )
 
         # Modalities
         mdata.mod = Dict{String, AnnData}()
@@ -199,8 +205,8 @@ function Base.getindex(
     newmu = MuData(
         mod=Dict{String, AnnData}(
             k => ad[
-                getadidx(I, mdata.obsm[k], mdata.obs_names),
-                getadidx(J, mdata.varm[k], mdata.var_names),
+                getadidx(I, mdata.obsmap[k], mdata.obs_names),
+                getadidx(J, mdata.varmap[k], mdata.var_names),
             ] for (k, ad) in mdata.mod
         ),
         obs=isempty(mdata.obs) ? nothing : mdata.obs[i, :],
@@ -213,8 +219,10 @@ function Base.getindex(
     copy_subset(mdata.varm, newmu.varm, i, j)
     copy_subset(mdata.obsp, newmu.obsp, i, j)
     copy_subset(mdata.varp, newmu.varp, i, j)
+    copy_subset(mdata.obsmap, newmu.obsmap, i, j)
+    copy_subset(mdata.varmap, newmu.varmap, i, j)
 
-    for mapping in (newmu.obsm, newmu.varm)
+    for mapping in (newmu.obsmap, newmu.varmap)
         minval = maximum(size(mdata))
         for mod in keys(mdata.mod)
             minval = min(minval, minimum(mapping[mod]))
@@ -292,9 +300,9 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
     idxcol, rowcol, dupidxcol = find_unique_colnames(mdata, attr, 3)
 
     globaljoincols = Vector{String}()
-    for mod in intersect(keys(getproperty(mdata, mattr)), keys(mdata.mod))
+    for mod in intersect(keys(getproperty(mdata, mapattr)), keys(mdata.mod))
         colname = mod * ":" * rowcol
-        globaldata[!, colname] = getproperty(mdata, mattr)[mod]
+        globaldata[!, colname] = getproperty(mdata, mapattr)[mod]
         push!(globaljoincols, colname)
     end
 
@@ -382,10 +390,7 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
         end
         data_mod = leftjoin(
             data_mod,
-            insertcols!(
-                globaldata,
-                idxcol => old_rownames,
-            ),
+            insertcols!(globaldata, idxcol => old_rownames),
             on=[idxcol, globaljoincols...],
         )
         rownames = data_mod[!, idxcol]
@@ -418,7 +423,6 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
         getproperty(mdata, mattr)[mod] = map .> 0
     end
     setproperty!(mdata, attr, disallowmissing!(data_mod, error=false))
-
 
     keep_index = rownames .∈ (old_rownames,)
     @inbounds if sum(keep_index) != length(old_rownames)
@@ -465,11 +469,13 @@ struct MuDataView{Ti, Tj} <: AbstractMuData
     obs_names::SubIndex{<:AbstractString}
     obsm::StrAlignedMappingView{Tuple{1 => 1}}
     obsp::StrAlignedMappingView{Tuple{1 => 1, 2 => 1}}
+    obsmap::StrAlignedMappingView{Tuple{1 => 1}}
 
     var::SubDataFrame
     var_names::SubIndex{<:AbstractString}
     varm::StrAlignedMappingView{Tuple{1 => 2}}
     varp::StrAlignedMappingView{Tuple{1 => 2, 2 => 2}}
+    varmap::StrAlignedMappingView{Tuple{1 => 2}}
 end
 
 function Base.view(mu::MuData, I, J)
@@ -478,8 +484,8 @@ function Base.view(mu::MuData, I, J)
     mod = Dict(
         m => view(
             ad,
-            getadidx(I, mu.obsm[m], mu.obs_names, true),
-            getadidx(J, mu.varm[m], mu.var_names, true),
+            getadidx(I, mu.obsmap[m], mu.obs_names, true),
+            getadidx(J, mu.varmap[m], mu.var_names, true),
         ) for (m, ad) in mu.mod
     )
     return MuDataView(
@@ -491,10 +497,12 @@ function Base.view(mu::MuData, I, J)
         view(mu.obs_names, i),
         view(mu.obsm, i),
         view(mu.obsp, i, i),
+        view(mu.obsmap, i),
         view(mu.var, nrow(mu.var) > 0 ? j : (:), :),
         view(mu.var_names, j),
         view(mu.varm, j),
         view(mu.varp, j, j),
+        view(mu.varmap, j),
     )
 end
 function Base.view(mu::MuDataView, I, J)
