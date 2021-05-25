@@ -1,5 +1,7 @@
 ![Muon.jl](https://user-images.githubusercontent.com/32863903/112323914-864a0f80-8cb2-11eb-91ae-375cdb61cd1b.png)
 
+[![](https://img.shields.io/badge/docs-dev-blue.svg)](https://gtca.github.io/Muon.jl/dev)
+
 # Muon for Julia
 
 Muon is originally [a Python library to work with multimodal data](https://github.com/gtca/muon). `Muon.jl` brings the ability to work with the same data structures to Julia.
