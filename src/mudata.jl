@@ -299,13 +299,6 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
 
     idxcol, rowcol, dupidxcol = find_unique_colnames(mdata, attr, 3)
 
-    globaljoincols = Vector{String}()
-    for mod in intersect(keys(getproperty(mdata, mapattr)), keys(mdata.mod))
-        colname = mod * ":" * rowcol
-        globaldata[!, colname] = getproperty(mdata, mapattr)[mod]
-        push!(globaljoincols, colname)
-    end
-
     if join_common &&
        length(mdata.mod) > 1 &&
        !all(
@@ -375,6 +368,27 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
                     axis == 0 ? vcat(dfs..., cols=:union) :
                     outerjoin(dfs..., on=[idxcol, dupidxcol])
             end
+
+            # reorder based on individual dataframes
+            if axis == 1
+                newidx = DataFrame(union([zip(df[:, idxcol], df[:, dupidxcol]) for df in dfs]...))
+                rename!(newidx, [idxcol, dupidxcol])
+                if size(globaldata, 1) > 0
+                    mask = newidx[!, idxcol] .∈ (old_rownames,)
+                    newidx = vcat(newidx[mask, :], newidx[.~mask, :])
+                end
+                newidx[!, rowcol] = 1:size(newidx, 1)
+                oldsize = size(data_mod, 1)
+                data_mod = innerjoin(data_mod, newidx, on=[idxcol, dupidxcol])
+                if oldsize != size(data_mod, 1)
+                    throw(
+                        ErrorException(
+                            "Something went wrong when reordering the global data frame (global data frame had $oldsize rows, but only $(size(data_mod, 1)) rows after reordering). Please report a bug.",
+                        ),
+                    )
+                end
+                data_mod = select!(data_mod[sortperm(data_mod[!, rowcol]), :], Not(rowcol))
+            end
         elseif length(mdata.mod) == 1
             mod, ad = iterate(mdata.mod)[1]
             data_mod = insertcols!(
@@ -385,6 +399,18 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
             )
         end
 
+        # this occurs when join_common=true and we already have a global data frame, e.g. after reading from HDF5
+        if join_common
+            sharedcols = intersect(names(data_mod), names(globaldata))
+            rename!(globaldata, [col => "global:$col" for col in sharedcols])
+        end
+
+        globaljoincols = Vector{String}()
+        for mod in intersect(keys(getproperty(mdata, mapattr)), keys(mdata.mod))
+            colname = mod * ":" * rowcol
+            globaldata[!, colname] = getproperty(mdata, mapattr)[mod]
+            push!(globaljoincols, colname)
+        end
         for col in globaljoincols
             data_mod[!, col] = coalesce.(data_mod[!, col], 0x0)
         end
@@ -395,6 +421,17 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
         )
         rownames = data_mod[!, idxcol]
         select!(data_mod, Not([idxcol, dupidxcol]))
+
+        if join_common
+            for col in sharedcols
+                gcol = "global:$col"
+                if data_mod[col] == data_mod[gcol]
+                    select!(data_mod, Not(gcol))
+                else
+                    @warn "Column $col was present in $attr but is also a common column in all modalities, and their contents differ. $attr.$col was renamed to $attr.$gcol."
+                end
+            end
+        end
 
         try
             rownames = convert(Vector{nonmissingtype(eltype(rownames))}, rownames)

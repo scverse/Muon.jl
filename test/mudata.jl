@@ -1,6 +1,8 @@
 using DataFrames
 using HDF5
 
+tmp = mktempdir()
+
 n = 100
 d1 = 10
 d2 = 20
@@ -145,7 +147,6 @@ end
 end
 
 @testset "readwrite" begin
-    tmp = mktempdir()
     tempfile1 = joinpath(tmp, "tmp1.h5mu")
     writeh5mu(tempfile1, md)
     read_md = (@test_logs (:warn, warn_msg) readh5mu(tempfile1, backed=false))
@@ -178,4 +179,39 @@ end
     @test isequal(md.var, read_md_backed.var)
     @test isequal(md.obs, read_md.obs)
     @test isequal(md.obs, read_md_backed.obs)
+end
+
+@testset "obs_var" begin
+    ad1, ad2, _ = make_ads()
+    ad2.var_names = ["ad2_$i" for i in 1:size(ad2, 2)]
+    md = MuData(mod=Dict("ad1" => ad1, "ad2" => ad2))
+    tempfile = joinpath(tmp, "tmp.h5mu")
+    @testset "obs_global_columns" begin
+        for (m, mod) in md.mod
+            mod.obs = DataFrame()
+            mod.obs[!, "demo"] = repeat([m], size(mod, 1))
+        end
+        md.obs[!, "demo"] = repeat(["global"], size(md, 1))
+        update!(md)
+        @test sort(names(md.obs)) == sort(vcat(["$m:demo" for m in keys(md.mod)], ["demo"]))
+        writeh5mu(tempfile, md)
+        read_md = readh5mu(tempfile, backed=false)
+        @test sort(names(read_md.obs)) == sort(vcat(["$m:demo" for m in keys(md.mod)], ["demo"]))
+    end
+
+    @testset "var_global_columns" begin
+        for (m, mod) in md.mod
+            mod.var = DataFrame()
+            mod.var[!, "demo"] = repeat([m], size(mod, 2))
+        end
+        md.var[!, "global"] = repeat(["global_var"], size(md, 2))
+        update!(md)
+        @test sort(names(md.var)) == sort(["demo", "global"])
+        select!(md.var, Not("global"))
+        update!(md)
+        @test names(md.var) == ["demo"]
+        writeh5mu(tempfile, md)
+        read_md = readh5mu(tempfile, backed=false)
+        @test names(md.var) == ["demo"]
+    end
 end
