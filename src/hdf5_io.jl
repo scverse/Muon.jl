@@ -173,7 +173,7 @@ write_impl(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, data::Sub
     write_impl(parent, name, copy(data))
 
 function write_impl(
-    parent::Union{HDF5.File, HDF5.Group},
+    parentgrp::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
     data::AbstractArray;
     extensible::Bool=false,
@@ -191,7 +191,7 @@ function write_impl(
         dims = size(data)
     end
     dtype = datatype(data)
-    write_impl_array(parent, name, data, dtype, dims, compress)
+    write_impl_array(parentgrp, name, data, dtype, dims, compress)
 end
 
 function write_impl_array(

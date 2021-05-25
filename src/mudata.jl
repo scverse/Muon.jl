@@ -8,11 +8,13 @@ mutable struct MuData <: AbstractMuData
     obs_names::Index{<:AbstractString}
     obsm::StrAlignedMapping{Tuple{1 => 1}, MuData}
     obsp::StrAlignedMapping{Tuple{1 => 1, 2 => 1}, MuData}
+    obsmap::StrAlignedMapping{Tuple{1 => 1}, MuData}
 
     var::DataFrame
     var_names::Index{<:AbstractString}
     varm::StrAlignedMapping{Tuple{1 => 2}, MuData}
     varp::StrAlignedMapping{Tuple{1 => 2, 2 => 2}, MuData}
+    varmap::StrAlignedMapping{Tuple{1 => 2}, MuData}
 
     function MuData(file::HDF5.File, backed=true)
         mdata = new(backed ? file : nothing)
@@ -32,6 +34,7 @@ mutable struct MuData <: AbstractMuData
             mdata,
             haskey(file, "obsp") ? read_dict_of_matrices(file["obsp"]) : nothing,
         )
+        mdata.obsmap = StrAlignedMapping{Tuple{1 => 1}}(mdata, haskey(file, "obsmap") ? read_dict_of_matrices(file["obsmap"]) : nothing)
 
         # Variables
         mdata.varm = StrAlignedMapping{Tuple{1 => 2}}(
@@ -42,6 +45,7 @@ mutable struct MuData <: AbstractMuData
             mdata,
             haskey(file, "varp") ? read_dict_of_matrices(file["varp"]) : nothing,
         )
+        mdata.varmap = StrAlignedMapping{Tuple{1 => 2}}(mdata, haskey(file, "varmap") ? read_dict_of_matrices(file["varmap"]) : nothing)
 
         # Modalities
         mdata.mod = Dict{String, AnnData}()
@@ -69,6 +73,8 @@ mutable struct MuData <: AbstractMuData
         }=nothing,
         obsp::Union{AbstractDict{<:AbstractString, <:AbstractMatrix{<:Number}}, Nothing}=nothing,
         varp::Union{AbstractDict{<:AbstractString, <:AbstractMatrix{<:Number}}, Nothing}=nothing,
+        obsmap::Union{AbstractDict{<:AbstractString, <:AbstractVector{<:Integer}}, Nothing}=nothing,
+        varmap::Union{AbstractDict{<:AbstractString, <:AbstractVector{<:Integer}}, Nothing}=nothing,
         do_update=true,
     )
         mdata = new(nothing, Dict{String, AnnData}())
@@ -85,6 +91,8 @@ mutable struct MuData <: AbstractMuData
         mdata.varm = StrAlignedMapping{Tuple{1 => 2}}(mdata, varm)
         mdata.obsp = StrAlignedMapping{Tuple{1 => 1, 2 => 1}}(mdata, obsp)
         mdata.varp = StrAlignedMapping{Tuple{1 => 2, 2 => 2}}(mdata, varp)
+        mdata.obsmap = StrAlignedMapping{Tuple{1 => 1}}(mdata, obsmap)
+        mdata.varmap = StrAlignedMapping{Tuple{1 => 2}}(mdata, varmap)
 
         if do_update
             update!(mdata)
@@ -153,9 +161,11 @@ function write_metadata(parent::Union{HDF5.File, HDF5.Group}, mudata::AbstractMu
     write_attr(parent, "obs", mudata.obs_names, shrink_attr(mudata, :obs))
     write_attr(parent, "obsm", mudata.obsm)
     write_attr(parent, "obsp", mudata.obsp)
+    write_attr(parent, "obsmap", mudata.obsmap)
     write_attr(parent, "var", mudata.var_names, shrink_attr(mudata, :var))
     write_attr(parent, "varm", mudata.varm)
     write_attr(parent, "varp", mudata.varp)
+    write_attr(parent, "varmap", mudata.varmap)
 end
 
 Base.size(mdata::AbstractMuData) = (length(mdata.obs_names), length(mdata.var_names))
@@ -276,6 +286,7 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
     globaldata = getproperty(mdata, attr)[!, globalcols]
     namesattr = Symbol(string(attr) * "_names")
     mattr = Symbol(string(attr) * "m")
+    mapattr = Symbol(string(attr) * "map")
     old_rownames = getproperty(mdata, namesattr)
 
     idxcol, rowcol, dupidxcol = find_unique_colnames(mdata, attr, 3)
@@ -402,8 +413,9 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
         adindices = data_mod[!, colname]
         select!(data_mod, Not(colname))
         replace!(adindices, missing => 0x0)
-        getproperty(mdata, mattr)[mod] =
-            convert(Vector{minimum_unsigned_type_for_n(maximum(adindices))}, adindices)
+        map = convert(Vector{minimum_unsigned_type_for_n(maximum(adindices))}, adindices)
+        getproperty(mdata, mapattr)[mod] = map
+        getproperty(mdata, mattr)[mod] = map .> 0
     end
     setproperty!(mdata, attr, disallowmissing!(data_mod, error=false))
 
