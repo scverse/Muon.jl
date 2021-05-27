@@ -12,16 +12,16 @@ ad = AnnData(X=x)</code></pre><pre class="documenter-example-output">AnnData obj
  &quot;obs_9&quot;
  &quot;obs_10&quot;</pre><p>Corresponding arrays for the observations are stored in the <code>.obsm</code> slot:</p><pre><code class="language-julia">f = svd(x);
 ad.obsm[&quot;X_svd&quot;] = f.U * Diagonal(f.S);</code></pre><pre class="documenter-example-output">10×5 Matrix{Float64}:
- -0.918583  -0.246326    1.6901e-16   -4.14421e-17   3.25028e-18
- -0.887995  -0.107357    2.46205e-17   1.08497e-17   3.64905e-17
- -0.838145  -0.117194    3.3536e-17    3.69332e-17  -1.34083e-17
- -0.948302  -0.514805   -4.25235e-17   1.97992e-17  -4.10308e-17
- -0.844609   0.0736088   2.01825e-17   2.30467e-18  -3.1411e-18
- -0.471753  -0.0273332   7.18613e-18  -8.27236e-18  -1.21768e-17
- -1.28503    0.342398   -4.4402e-17   -5.09137e-17  -2.62271e-17
- -1.05353    0.523235    6.79878e-17   4.57247e-17  -1.29572e-17
- -0.60874   -0.057996   -1.74195e-18   3.30919e-17   1.59686e-17
- -2.06022   -0.0471728  -9.65143e-17  -1.07912e-17   2.9506e-17</pre><p>When data is assigned, it is verified first that the dimensions match:</p><pre><code class="language-">ad.obsm[&quot;X_Vt&quot;] = f.Vt  # won&#39;t work
+ -0.918583  -0.246326    1.64669e-16   1.63198e-17   8.35728e-19
+ -0.887995  -0.107357   -3.44789e-17   4.97535e-17  -4.8041e-18
+ -0.838145  -0.117194    2.13399e-17  -3.63512e-17  -7.90029e-18
+ -0.948302  -0.514805   -5.97048e-17  -1.49151e-17  -1.59366e-17
+ -0.844609   0.0736088   2.67021e-17  -1.62836e-17   4.22879e-18
+ -0.471753  -0.0273332   1.0352e-17   -4.76269e-18  -1.16737e-17
+ -1.28503    0.342398   -1.34896e-17   1.32736e-17  -1.41225e-17
+ -1.05353    0.523235    1.69333e-17  -1.34027e-17  -6.51216e-18
+ -0.60874   -0.057996   -4.22105e-18  -2.09937e-17   1.43622e-17
+ -2.06022   -0.0471728  -5.20744e-17   5.4764e-18    2.10822e-17</pre><p>When data is assigned, it is verified first that the dimensions match:</p><pre><code class="language-">ad.obsm[&quot;X_Vt&quot;] = f.Vt  # won&#39;t work
 # =&gt; DimensionMismatch</code></pre><h3 id="Slicing-AnnData-objects"><a class="docs-heading-anchor" href="#Slicing-AnnData-objects">Slicing AnnData objects</a><a id="Slicing-AnnData-objects-1"></a><a class="docs-heading-anchor-permalink" href="#Slicing-AnnData-objects" title="Permalink"></a></h3><p>Just as simple arrays, AnnData objects can be subsetted with slicing operations, with the first dimension corresponding to <em>observations</em> and the second dimension corresponding to <em>variables</em>:</p><pre><code class="language-julia">obs_sub = &quot;obs_&quot; .* string.(collect(1:3))
 ad_sub = ad[obs_sub,:]</code></pre><pre class="documenter-example-output">AnnData object 3 ✕ 5</pre><p>Since the dimensions are labelled, using names is a natural way to subset these objects but boolean and integer arrays can be used as well:</p><pre><code class="language-julia"># both return the same subset
 ad_sub[[true,false,true],:]
@@ -38,6 +38,6 @@ md = MuData(mod=Dict(&quot;view_rand&quot; =&gt; ad, &quot;view_binom&quot; =&gt
 └ view_binom
   AnnData object 2 ✕ 7</pre><h3 id="Multimodal-annotation"><a class="docs-heading-anchor" href="#Multimodal-annotation">Multimodal annotation</a><a id="Multimodal-annotation-1"></a><a class="docs-heading-anchor-permalink" href="#Multimodal-annotation" title="Permalink"></a></h3><p>We can store annotation at the multimodal level, that includes multidimensional arrays:</p><pre><code class="language-julia">md.obsm[&quot;X_svd&quot;] = f.U * Diagonal(f.S);
 md.obsm</code></pre><pre class="documenter-example-output">Muon.AlignedMapping{Tuple{1 =&gt; 1}, String, MuData} with 3 entries:
-  &quot;X_svd&quot;      =&gt; [-0.918583 -0.246326 … -4.14421e-17 3.25028e-18; -0.887995 -0…
+  &quot;X_svd&quot;      =&gt; [-0.918583 -0.246326 … 1.63198e-17 8.35728e-19; -0.887995 -0.…
   &quot;view_rand&quot;  =&gt; Bool[1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-  &quot;view_binom&quot; =&gt; Bool[1, 1, 1, 1, 1, 1, 1, 1, 1, 1]</pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../io/">« I/O</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Thursday 27 May 2021 14:26">Thursday 27 May 2021</span>. Using Julia version 1.6.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+  &quot;view_binom&quot; =&gt; Bool[1, 1, 1, 1, 1, 1, 1, 1, 1, 1]</pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../io/">« I/O</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Thursday 27 May 2021 15:49">Thursday 27 May 2021</span>. Using Julia version 1.6.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
