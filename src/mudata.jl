@@ -223,12 +223,10 @@ function Base.getindex(
     copy_subset(mdata.varmap, newmu.varmap, i, j)
 
     for mapping in (newmu.obsmap, newmu.varmap)
-        minval = maximum(size(mdata))
         for mod in keys(mdata.mod)
-            minval = min(minval, minimum(mapping[mod]))
-        end
-        for mod in keys(mdata.mod)
-            mapping[mod] .-= eltype(mapping[mod])(minval) .- 0x1
+            cmap = mapping[mod]
+            nz = findall(cmap .> 0x0)
+            cmap[nz] .= 1:length(nz)
         end
     end
     return newmu
