@@ -174,6 +174,10 @@ function write_metadata(parent::Union{HDF5.File, HDF5.Group}, mudata::AbstractMu
     write_attr(parent, "varmap", mudata.varmap)
 end
 
+# FileIO support
+load(f::File{format"h5mu"}) = readh5mu(filename(f), backed=false) # I suppose this is more consistent with the rest of FileIO?
+save(f::File{format"h5mu"}, data::AbstractMuData) = writeh5mu(filename(f), data)
+
 Base.size(mdata::AbstractMuData) = (length(mdata.obs_names), length(mdata.var_names))
 Base.size(mdata::AbstractMuData, d::Integer) = size(mdata)[d]
 

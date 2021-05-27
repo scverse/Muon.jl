@@ -186,6 +186,9 @@ function write_unbacked(parent::Union{HDF5.File, HDF5.Group}, adata::AbstractAnn
     write_attr(parent, "varm", adata.varm)
     write_attr(parent, "varp", adata.varp)
 end
+# FileIO support
+load(f::File{format"h5ad"}) = readh5ad(filename(f), backed=false) # I suppose this is more consistent with the rest of FileIO?
+save(f::File{format"h5ad"}, data::AbstractAnnData) = writeh5ad(filename(f), data)
 
 Base.size(adata::AbstractAnnData) = (length(adata.obs_names), length(adata.var_names))
 Base.size(adata::AbstractAnnData, d::Integer) = size(adata)[d]
