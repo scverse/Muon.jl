@@ -234,7 +234,7 @@ struct SubIndex{T, V, I} <: AbstractIndex{T, V}
 end
 SubIndex(idx::Index{T, V}, indices::I) where {T, V, I} = SubIndex{T, V, I}(idx, indices, nothing)
 
-function Base.view(idx::Index, I::AbstractRange)
+function Base.view(idx::Index, I::Union{AbstractRange, Colon})
     @boundscheck checkbounds(idx, I)
     return SubIndex(idx, I)
 end
@@ -259,6 +259,7 @@ Base.copy(si::SubIndex) = Index(si)
 Base.parent(si::SubIndex) = si.parent
 Base.parentindices(si::SubIndex) = si.indices
 Base.length(si::SubIndex) = length(parentindices(si))
+Base.length(si::SubIndex{T, V, Colon}) where {T, V} = length(parent(si))
 Base.length(si::SubIndex{T, V, I}) where {T, V, I <: AbstractArray{Bool}} = length(si.revmapping)
 Base.size(si::SubIndex) = (length(si),)
 Base.values(si::SubIndex) = parent(si)[parentindices(si)]
@@ -382,11 +383,19 @@ function Base.getindex(si::SubIndex, i::Union{Integer, AbstractVector{<:Integer}
     @boundscheck checkbounds(si, i)
     return @inbounds parent(si)[Base.reindex((parentindices(si),), (i,))[1]]
 end
+function Base.getindex(si::SubIndex{T, V, Colon}, i::Union{Integer, AbstractVector{<:Integer}}) where {T, V}
+    @boundscheck checkbounds(si, i)
+    return @inbounds parent(si)[i]
+end
 
 function Base.setindex!(si::SubIndex{T}, newval::T, i::Integer) where {T}
     @boundscheck checkbounds(si, i)
     @inbounds setindex!(parent(si), newval, Base.reindex((parentindices(si),), (i,))[1])
     return si
+end
+function Base.setindex!(si::SubIndex{T, V, Colon}, newval::T, i::Integer) where {T, V}
+    @boundscheck checkbounds(si, i)
+    @inbounds setindex!(parent(si), newval, i)
 end
 function Base.setindex!(si::SubIndex{T}, newval::T, oldval::T) where {T}
     oldidx = parent(si)[oldval, true]
