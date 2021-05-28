@@ -19,7 +19,16 @@ mutable struct AnnData <: AbstractAnnData
 
     layers::AbstractAlignedMapping{Tuple{1 => 1, 2 => 2}, String}
 
-    function AnnData(file::Union{HDF5.File, HDF5.Group}, backed=true)
+    function AnnData(file::Union{HDF5.File, HDF5.Group}, backed=true, checkversion=true)
+        if checkversion
+            attrs = attributes(file)
+            if !haskey(attrs, "encoding-type")
+                @warn "The HDF5 file was not created by muon, we can't guarantee that everything will work correctly"
+            elseif attrs["encoding-type"] != "AnnData"
+                error("This HDF5 file does not appear to hold an AnnData object")
+            end
+        end
+
         adata = new(backed ? file : nothing)
 
         # this needs to go first because it's used by size() and size()
@@ -129,7 +138,7 @@ function readh5ad(filename::AbstractString; backed=true)
     end
     local adata
     try
-        adata = AnnData(fid, backed)
+        adata = AnnData(fid, backed, false)
     catch e
         close(fid)
         rethrow()
@@ -171,6 +180,11 @@ function Base.write(
 end
 
 function Base.write(parent::Union{HDF5.File, HDF5.Group}, adata::AbstractAnnData)
+    attrs = attributes(parent)
+    attrs["encoding-type"] = "AnnData"
+    attrs["encoding-version"] = string(ANNDATAVERSION)
+    attrs["encoder"] = NAME
+    attrs["encoder-version"] = string(VERSION)
     if parent === file(adata)
         write(adata)
     else

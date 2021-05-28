@@ -16,7 +16,16 @@ mutable struct MuData <: AbstractMuData
     varp::StrAlignedMapping{Tuple{1 => 2, 2 => 2}, MuData}
     varmap::StrAlignedMapping{Tuple{1 => 2}, MuData}
 
-    function MuData(file::HDF5.File, backed=true)
+    function MuData(file::Union{HDF5.File, HDF5.Group}, backed=true, checkversion=true)
+        if checkversion
+            attrs = attributes(file)
+            if !haskey(attrs, "encoding-type")
+                @warn "The HDF5 file was not created by muon, we can't guarantee that everything will work correctly"
+            elseif attrs["encoding-type"] != "MuData"
+                error("This HDF5 file does not appear to hold a MuData object")
+            end
+        end
+
         mdata = new(backed ? file : nothing)
 
         # this needs to go first because it's used by size() and size()
@@ -57,7 +66,7 @@ mutable struct MuData <: AbstractMuData
         mdata.mod = Dict{String, AnnData}()
         mods = HDF5.keys(file["mod"])
         for modality in mods
-            mdata.mod[modality] = AnnData(file["mod"][modality], backed)
+            mdata.mod[modality] = AnnData(file["mod"][modality], backed, checkversion)
         end
 
         return update!(mdata)
@@ -125,7 +134,7 @@ function readh5mu(filename::AbstractString; backed=true)
     end
     local mdata
     try
-        mdata = MuData(fid, backed)
+        mdata = MuData(fid, backed, false)
     catch e
         close(fid)
         rethrow()
@@ -158,6 +167,11 @@ function writeh5mu(filename::AbstractString, mudata::AbstractMuData)
 end
 
 function Base.write(parent::Union{HDF5.File, HDF5.Group}, mudata::AbstractMuData)
+    attrs = attributes(parent)
+    attrs["encoding-type"] = "MuData"
+    attrs["encoding-version"] = string(MUDATAVERSION)
+    attrs["encoder"] = NAME
+    attrs["encoder-version"] = string(VERSION)
     if parent === file(mudata)
         write(mudata)
     else
@@ -171,7 +185,7 @@ end
 
 function Base.write(mudata::AbstractMuData)
     if isnothing(file(mudata))
-        error("adata is not backed, need somewhere to write to")
+        error("mudata is not backed, need somewhere to write to")
     end
     for adata in values(mudata.mod)
         write(adata)
