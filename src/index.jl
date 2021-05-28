@@ -113,7 +113,7 @@ function _getindex_byposition(idx::Index{T}, i::Integer) where {T}
             end
         end
     end
-    throw(ErrorException("Element not found. This should never happen."))
+    error("Element not found. This should never happen.")
 end
 
 function _delete!(idx::Index, oldkeyindex::Integer)

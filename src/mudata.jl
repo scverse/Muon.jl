@@ -180,12 +180,12 @@ function Base.write(mudata::AbstractMuData)
 end
 
 function write_metadata(parent::Union{HDF5.File, HDF5.Group}, mudata::AbstractMuData)
-    write_attr(parent, "obs", mudata.obs_names, shrink_attr(mudata, :obs))
-    write_attr(parent, "obsm", mudata.obsm)
+    write_attr(parent, "obs", shrink_attr(mudata, :obs), index=mudata.obs_names)
+    write_attr(parent, "obsm", mudata.obsm, index=mudata.obs_names)
     write_attr(parent, "obsp", mudata.obsp)
-    write_attr(parent, "obsmap", mudata.obsmap)
-    write_attr(parent, "var", mudata.var_names, shrink_attr(mudata, :var))
-    write_attr(parent, "varm", mudata.varm)
+    write_attr(parent, "obsmap", mudata.obsmap,)
+    write_attr(parent, "var", shrink_attr(mudata, :var), index=mudata.var_names)
+    write_attr(parent, "varm", mudata.varm, index=mudata.var_names)
     write_attr(parent, "varp", mudata.varp)
     write_attr(parent, "varmap", mudata.varmap)
 end

@@ -188,11 +188,11 @@ function Base.write(adata)
 end
 
 function write_unbacked(parent::Union{HDF5.File, HDF5.Group}, adata::AbstractAnnData)
-    write_attr(parent, "obs", adata.obs_names, adata.obs)
-    write_attr(parent, "obsm", adata.obsm)
+    write_attr(parent, "obs", adata.obs, index=adata.obs_names)
+    write_attr(parent, "obsm", adata.obsm, index=adata.obs_names)
     write_attr(parent, "obsp", adata.obsp)
-    write_attr(parent, "var", adata.var_names, adata.var)
-    write_attr(parent, "varm", adata.varm)
+    write_attr(parent, "var", adata.var, index=adata.var_names)
+    write_attr(parent, "varm", adata.varm, index=adata.var_names)
     write_attr(parent, "varp", adata.varp)
 end
 # FileIO support
