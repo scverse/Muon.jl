@@ -13,6 +13,17 @@ using FileIO
 export readh5mu, readh5ad, writeh5mu, writeh5ad, isbacked, update_obs!, update_var!, update!
 export AnnData, MuData
 
+import Pkg
+# this executes only during precompilation
+let
+    pkg = Pkg.Types.read_package(joinpath(@__DIR__, "..", "Project.toml"))
+    global VERSION = pkg.version
+    global NAME = pkg.name * ".jl"
+end
+MUDATAVERSION = v"0.1.0"
+ANNDATAVERSION = v"0.1.0"
+
+
 include("index.jl")
 include("sparsedataset.jl")
 include("transposeddataset.jl")

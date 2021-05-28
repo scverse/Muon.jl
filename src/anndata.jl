@@ -130,10 +130,12 @@ function readh5ad(filename::AbstractString; backed=true)
     local adata
     try
         adata = AnnData(fid, backed)
-    finally
-        if !backed
-            close(fid)
-        end
+    catch e
+        close(fid)
+        rethrow()
+    end
+    if !backed
+        close(fid)
     end
     return adata
 end
@@ -141,15 +143,22 @@ end
 function writeh5ad(filename::AbstractString, adata::AbstractAnnData)
     filename = abspath(filename)
     if file(adata) === nothing || filename != HDF5.filename(file(adata))
-        hfile = h5open(filename, "w")
+        hfile = h5open(filename, "w", userblock=512)
         try
             write(hfile, adata)
+            close(hfile)
+            hfile = open(filename, "r+")
+            write(
+                hfile,
+                "AnnData (format-version=$ANNDATAVERSION;creator=$NAME;creator-version=$VERSION)",
+            )
         finally
             close(hfile)
         end
     else
         write(adata)
     end
+    return nothing
 end
 
 function Base.write(

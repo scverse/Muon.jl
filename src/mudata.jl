@@ -111,6 +111,13 @@ file(mu::MuData) = mu.file
 
 function readh5mu(filename::AbstractString; backed=true)
     filename = abspath(filename) # this gets stored in the HDF5 objects for backed datasets
+    if String(read(filename, 6)) != "MuData"
+        if HDF5.ishdf5(filename)
+            @warn "The HDF5 file was not created by muon, we can't guarantee that everything will work correctly"
+        else
+            error("The file is not an HDF5 file")
+        end
+    end
     if !backed
         fid = h5open(filename, "r")
     else
@@ -119,10 +126,12 @@ function readh5mu(filename::AbstractString; backed=true)
     local mdata
     try
         mdata = MuData(fid, backed)
-    finally
-        if !backed
-            close(fid)
-        end
+    catch e
+        close(fid)
+        rethrow()
+    end
+    if !backed
+        close(fid)
     end
     return mdata
 end
@@ -130,15 +139,22 @@ end
 function writeh5mu(filename::AbstractString, mudata::AbstractMuData)
     filename = abspath(filename)
     if file(mudata) === nothing || filename != HDF5.filename(file(mudata))
-        hfile = h5open(filename, "w")
+        hfile = h5open(filename, "w", userblock=512)
         try
             write(hfile, mudata)
+            close(hfile)
+            hfile = open(filename, "r+")
+            write(
+                hfile,
+                "MuData (format-version=$MUDATAVERSION;creator=$NAME;creator-version=$VERSION)",
+            )
         finally
             close(hfile)
         end
     else
         write(mudata)
     end
+    return nothing
 end
 
 function Base.write(parent::Union{HDF5.File, HDF5.Group}, mudata::AbstractMuData)
@@ -155,7 +171,7 @@ end
 
 function Base.write(mudata::AbstractMuData)
     if isnothing(file(mudata))
-        throw("adata is not backed, need somewhere to write to")
+        error("adata is not backed, need somewhere to write to")
     end
     for adata in values(mudata.mod)
         write(adata)
@@ -383,10 +399,8 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
                 oldsize = size(data_mod, 1)
                 data_mod = innerjoin(data_mod, newidx, on=[idxcol, dupidxcol])
                 if oldsize != size(data_mod, 1)
-                    throw(
-                        ErrorException(
-                            "Something went wrong when reordering the global data frame (global data frame had $oldsize rows, but only $(size(data_mod, 1)) rows after reordering). Please report a bug.",
-                        ),
+                    error(
+                        "Something went wrong when reordering the global data frame (global data frame had $oldsize rows, but only $(size(data_mod, 1)) rows after reordering). Please report a bug.",
                     )
                 end
                 data_mod = select!(data_mod[sortperm(data_mod[!, rowcol]), :], Not(rowcol))

@@ -114,7 +114,7 @@ function write_impl(
     name::AbstractString,
     data::CategoricalVector,
 )
-    write_impl(parent, name, data.refs)
+    write_impl(parent, name, data.refs .- 0x1)
     write_impl(parent, "__categories/$name", levels(data))
     attributes(parent[name])["categories"] = HDF5.Reference(parent["__categories"], name)
 end
