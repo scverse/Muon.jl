@@ -343,6 +343,7 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
     end
 
     dupidx = Dict(mod => index_duplicates(getproperty(ad, namesattr)) for (mod, ad) in mdata.mod)
+    old_dupidx = index_duplicates(old_rownames)
     for (mod, dups) in dupidx, (mod2, ad) in mdata.mod
         if mod != mod2 && any(
             unique(getproperty(mdata.mod[mod], namesattr)[dups .> 0]) .∈
@@ -444,6 +445,14 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
         for col in globaljoincols
             data_mod[!, col] = coalesce.(data_mod[!, col], 0x0)
         end
+
+        if length(globaljoincols) == 0 && size(globaldata, 2) > 1 && any(old_dupidx .> 0)
+            @warn "$namesattr is not unique, global $attr is present, and $mapattr is empty. The update() is not well-defined, verify if global $attr map to the correct modality-specific $attr."
+            insertcols!(globaldata, dupidxcol => old_dupidx)
+            data_mod[!, dupidxcol] = index_duplicates(data_mod[!, idxcol])
+            push!(globaljoincols, dupidxcol)
+        end
+
         data_mod = leftjoin(
             data_mod,
             insertcols!(globaldata, idxcol => old_rownames),
