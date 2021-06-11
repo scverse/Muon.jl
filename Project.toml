@@ -1,7 +1,7 @@
 name = "Muon"
 uuid = "446846d7-b4ce-489d-bf74-72da18fe3629"
 authors = ["Danila Bredikhin <danila.bredikhin@embl.de>", "Ilia Kats <i.kats@dkfz-heidelberg.de>"]
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 CategoricalArrays = "324d7699-5711-5eae-9e2f-1d82baa6b597"
