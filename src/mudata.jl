@@ -16,6 +16,8 @@ mutable struct MuData <: AbstractMuData
     varp::StrAlignedMapping{Tuple{1 => 2, 2 => 2}, MuData}
     varmap::StrAlignedMapping{Tuple{1 => 2}, MuData}
 
+    uns::Dict{<:AbstractString, <:Any}
+
     function MuData(file::Union{HDF5.File, HDF5.Group}, backed=true, checkversion=true)
         if checkversion
             attrs = attributes(file)
@@ -62,6 +64,11 @@ mutable struct MuData <: AbstractMuData
             haskey(file, "varmap") ? read_dict_of_matrices(file["varmap"]) : nothing,
         )
 
+        # unstructured
+        mdata.uns =
+            haskey(file, "uns") ? read_dict_of_mixed(file["uns"], separate_index=false) :
+            Dict{String, Any}()
+
         # Modalities
         mdata.mod = Dict{String, AnnData}()
         mods = HDF5.keys(file["mod"])
@@ -90,6 +97,7 @@ mutable struct MuData <: AbstractMuData
         varp::Union{AbstractDict{<:AbstractString, <:AbstractMatrix{<:Number}}, Nothing}=nothing,
         obsmap::Union{AbstractDict{<:AbstractString, <:AbstractVector{<:Integer}}, Nothing}=nothing,
         varmap::Union{AbstractDict{<:AbstractString, <:AbstractVector{<:Integer}}, Nothing}=nothing,
+        uns::Union{AbstractDict{<:AbstractString, <:Any}, Nothing}=nothing,
         do_update=true,
     )
         mdata = new(nothing, Dict{String, AnnData}())
@@ -108,6 +116,7 @@ mutable struct MuData <: AbstractMuData
         mdata.varp = StrAlignedMapping{Tuple{1 => 2, 2 => 2}}(mdata, varp)
         mdata.obsmap = StrAlignedMapping{Tuple{1 => 1}}(mdata, obsmap)
         mdata.varmap = StrAlignedMapping{Tuple{1 => 2}}(mdata, varmap)
+        mdata.uns = isnothing(uns) ? Dict{String, Any}() : uns
 
         if do_update
             update!(mdata)
@@ -197,11 +206,12 @@ function write_metadata(parent::Union{HDF5.File, HDF5.Group}, mudata::AbstractMu
     write_attr(parent, "obs", shrink_attr(mudata, :obs), index=mudata.obs_names)
     write_attr(parent, "obsm", mudata.obsm, index=mudata.obs_names)
     write_attr(parent, "obsp", mudata.obsp)
-    write_attr(parent, "obsmap", mudata.obsmap,)
+    write_attr(parent, "obsmap", mudata.obsmap)
     write_attr(parent, "var", shrink_attr(mudata, :var), index=mudata.var_names)
     write_attr(parent, "varm", mudata.varm, index=mudata.var_names)
     write_attr(parent, "varp", mudata.varp)
     write_attr(parent, "varmap", mudata.varmap)
+    write_attr(parent, "uns", mudata.uns)
 end
 
 # FileIO support

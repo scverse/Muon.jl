@@ -19,6 +19,8 @@ mutable struct AnnData <: AbstractAnnData
 
     layers::AbstractAlignedMapping{Tuple{1 => 1, 2 => 2}, String}
 
+    uns::Dict{<:AbstractString, <:Any}
+
     function AnnData(file::Union{HDF5.File, HDF5.Group}, backed=true, checkversion=true)
         if checkversion
             attrs = attributes(file)
@@ -71,6 +73,11 @@ mutable struct AnnData <: AbstractAnnData
             adata.layers = BackedAlignedMapping{Tuple{1 => 1, 2 => 2}}(adata, adata.file, "layers")
         end
 
+        # unstructured
+        adata.uns =
+            haskey(file, "uns") ? read_dict_of_mixed(file["uns"], separate_index=false) :
+            Dict{String, Any}()
+
         return adata
     end
 
@@ -91,6 +98,7 @@ mutable struct AnnData <: AbstractAnnData
         obsp::Union{AbstractDict{<:AbstractString, <:AbstractMatrix{<:Number}}, Nothing}=nothing,
         varp::Union{AbstractDict{<:AbstractString, <:AbstractMatrix{<:Number}}, Nothing}=nothing,
         layers::Union{AbstractDict{<:AbstractString, <:AbstractMatrix{<:Number}}, Nothing}=nothing,
+        uns::Union{AbstractDict{<:AbstractString, <:Any}, Nothing}=nothing,
     )
         m, n = size(X)
         if isnothing(obs)
@@ -122,6 +130,7 @@ mutable struct AnnData <: AbstractAnnData
         adata.varm = StrAlignedMapping{Tuple{1 => 2}}(adata, varm)
         adata.varp = StrAlignedMapping{Tuple{1 => 2, 2 => 2}}(adata, varp)
         adata.layers = StrAlignedMapping{Tuple{1 => 1, 2 => 2}}(adata, layers)
+        adata.uns = isnothing(uns) ? Dict{String, Any}() : uns
 
         return adata
     end
@@ -190,24 +199,25 @@ function Base.write(parent::Union{HDF5.File, HDF5.Group}, adata::AbstractAnnData
     else
         write_attr(parent, "X", adata.X)
         write_attr(parent, "layers", adata.layers)
-        write_unbacked(parent, adata)
+        write_metadata(parent, adata)
     end
 end
 
 function Base.write(adata)
     if file(adata) === nothing
-        throw("adata is not backed, need somewhere to write to")
+        error("adata is not backed, need somewhere to write to")
     end
-    write_unbacked(file(adata), adata)
+    write_metadata(file(adata), adata)
 end
 
-function write_unbacked(parent::Union{HDF5.File, HDF5.Group}, adata::AbstractAnnData)
+function write_metadata(parent::Union{HDF5.File, HDF5.Group}, adata::AbstractAnnData)
     write_attr(parent, "obs", adata.obs, index=adata.obs_names)
     write_attr(parent, "obsm", adata.obsm, index=adata.obs_names)
     write_attr(parent, "obsp", adata.obsp)
     write_attr(parent, "var", adata.var, index=adata.var_names)
     write_attr(parent, "varm", adata.varm, index=adata.var_names)
     write_attr(parent, "varp", adata.varp)
+    write_attr(parent, "uns", adata.uns)
 end
 # FileIO support
 load(f::File{format"h5ad"}) = readh5ad(filename(f), backed=false) # I suppose this is more consistent with the rest of FileIO?

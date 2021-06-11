@@ -1,13 +1,7 @@
-function read_dataframe(tablegroup::HDF5.Group)
+function read_dataframe(tablegroup::HDF5.Group; separate_index=true, kwargs...)
     columns = read_attribute(tablegroup, "column-order")
 
-    havecat = false
-    if haskey(tablegroup, "__categories")
-        havecat = true
-        catcols = tablegroup["__categories"]
-    end
-
-    if haskey(attributes(tablegroup), "_index")
+    if separate_index && haskey(attributes(tablegroup), "_index")
         indexdsetname = read_attribute(tablegroup, "_index")
         rownames = read(tablegroup[indexdsetname])
     else
@@ -17,10 +11,9 @@ function read_dataframe(tablegroup::HDF5.Group)
     df = DataFrame()
 
     for col in columns
-        column = read(tablegroup, col)
-        if havecat && haskey(catcols, col)
-            cats = read(catcols, col)
-            column = compress(CategoricalArray(map(x -> cats[x + 1], column)))
+        column = read_matrix(tablegroup[col])
+        if sum(size(column) .> 1) > 1
+            @warn "column $col has more than 1 dimension for data frame $(HDF5.name(tablegroup)), skipping"
         end
         df[!, col] = column
     end
@@ -28,15 +21,32 @@ function read_dataframe(tablegroup::HDF5.Group)
     return df, rownames
 end
 
-function read_matrix(f::HDF5.Dataset)
+function read_matrix(f::HDF5.Dataset; kwargs...)
     mat = read(f)
-    if ndims(mat) > 1
+    if ndims(f) == 0
+        return mat
+    end
+    if ndims(f) > 1
         mat = PermutedDimsArray(mat, ndims(mat):-1:1) # transpose for h5py compatibility
+    end
+    if haskey(attributes(f), "categories")
+        categories = f[read_attribute(f, "categories")]
+        ordered =
+            haskey(attributes(categories), "ordered") &&
+            read_attribute(categories, "ordered") == true
+        cats = read(categories)
+        mat = mat .+ 0x1
+        mat = compress(
+            CategoricalArray{eltype(cats), ndims(mat)}(
+                mat,
+                CategoricalPool{eltype(cats), eltype(mat)}(cats, ordered),
+            ),
+        )
     end
     return mat
 end
 
-function read_matrix(f::HDF5.Group)
+function read_matrix(f::HDF5.Group; kwargs...)
     enctype = read_attribute(f, "encoding-type")
 
     if enctype == "csc_matrix" || enctype == "csr_matrix"
@@ -61,30 +71,46 @@ function read_matrix(f::HDF5.Group)
         mat = SparseMatrixCSC(shape..., indptr, indices, data)
         return iscsr ? mat' : mat
     else
-        throw("unknown encoding $enctype")
+        error("unknown encoding $enctype")
     end
 end
 
-function read_dict_of_matrices(f::HDF5.Group)
-    return Dict{String, AbstractArray{<:Number}}(key => read_matrix(f[key]) for key in keys(f))
+function read_dict_of_matrices(f::HDF5.Group; kwargs...)
+    return Dict{String, AbstractArray{<:Number}}(
+        key => read_matrix(f[key]; kwargs...) for key in keys(f)
+    )
 end
 
-read_auto(f::HDF5.Dataset) = (read_matrix(f), nothing)
-function read_auto(f::HDF5.Group)
-    enctype = read_attribute(f, "encoding-type")
-    if enctype == "dataframe"
-        return read_dataframe(f)
-    elseif endswith(enctype, "matrix")
-        return read_matrix(f), nothing
+read_auto(f::HDF5.Dataset; kwargs...) = (read_matrix(f; kwargs...), nothing)
+function read_auto(f::HDF5.Group; kwargs...)
+    if haskey(attributes(f), "encoding-type")
+        enctype = read_attribute(f, "encoding-type")
+        if enctype == "dataframe"
+            return read_dataframe(f; kwargs...)
+        elseif endswith(enctype, "matrix")
+            return read_matrix(f; kwargs), nothing
+        else
+            error("unknown encoding $enctype")
+        end
     else
-        throw("unknown encoding $enctype")
+        return read_dict_of_mixed(f; kwargs...), nothing
     end
 end
 
-function read_dict_of_mixed(f::HDF5.Group)
-    ret = Dict{String, Union{DataFrame, AbstractArray{<:Number}}}()
+function read_dict_of_mixed(f::HDF5.Group; kwargs...)
+    ret = Dict{
+        String,
+        Union{
+            DataFrame,
+            <:AbstractArray{<:Number},
+            <:AbstractArray{<:AbstractString},
+            <:AbstractString,
+            <:Number,
+            Dict,
+        },
+    }()
     for k in keys(f)
-        ret[k] = read_auto(f[k])[1] # assume data frames are properly aligned, so we can discard rownames
+        ret[k] = read_auto(f[k]; kwargs...)[1] # assume data frames are properly aligned, so we can discard rownames
     end
     return ret
 end
@@ -94,6 +120,15 @@ function write_attr(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, 
         delete_object(parent, name)
     end
     write_impl(parent, name, data; kwargs...)
+end
+
+function write_impl(
+    parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    data::Union{<:Number, <:AbstractString};
+    kwargs...,
+)
+    parent[name] = data
 end
 
 function write_impl(
@@ -113,11 +148,12 @@ end
 function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
-    data::CategoricalVector;
+    data::CategoricalArray;
     kwargs...,
 )
     write_impl(parent, name, data.refs .- 0x1; kwargs...)
     write_impl(parent, "__categories/$name", levels(data); kwargs...)
+    attributes(parent["__categories/$name"])["ordered"] = UInt8(isordered(data))
     attributes(parent[name])["categories"] = HDF5.Reference(parent["__categories"], name)
 end
 
@@ -125,7 +161,7 @@ function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
     data::AbstractDataFrame;
-    index::AbstractVector{<:AbstractString},
+    index::AbstractVector{<:AbstractString}=nothing,
     kwargs...,
 )
     g = create_group(parent, name)
@@ -140,8 +176,18 @@ function write_impl(
 
     idxname = "_index"
     columns = names(data)
-    while idxname ∈ columns
-        idxname = "_" * idxname
+    if !isnothing(index)
+        while idxname ∈ columns
+            idxname = "_" * idxname
+        end
+    else
+        if idxname ∈ columns
+            index = data[!, idxname]
+            select!(data, Not(idxname))
+        else
+            @warn "Data frame $(HDF5.name(parent))/$name does not have an _index column, a row number index will be written"
+            index = 1:nrow(data)
+        end
     end
     g = parent[name]
     write_impl(g, idxname, values(index); kwargs...)
@@ -157,14 +203,7 @@ write_impl(
     extensible::Bool=false,
     compress::UInt8=UInt8(9),
     kwargs...,
-) = write_impl(
-    parent,
-    name,
-    Int8.(data);
-    extensible=extensible,
-    compress=compress,
-    kwargs...,
-)
+) = write_impl(parent, name, Int8.(data); extensible=extensible, compress=compress, kwargs...)
 
 write_impl(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, data::SubArray; kwargs...) =
     write_impl(parent, name, copy(data); kwargs...)
@@ -172,7 +211,8 @@ write_impl(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, data::Sub
 function write_impl(
     parentgrp::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
-    data::AbstractArray,;
+    data::AbstractArray,
+    ;
     extensible::Bool=false,
     compress::UInt8=0x9,
     kwargs...,
