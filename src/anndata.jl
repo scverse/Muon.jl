@@ -299,6 +299,8 @@ struct AnnDataView{Ti, Tj} <: AbstractAnnData
     varp::StrAlignedMappingView{Tuple{1 => 2, 2 => 2}}
 
     layers::StrAlignedMappingView{Tuple{1 => 1, 2 => 2}}
+
+    uns::Dict{<:AbstractString, <:Any}
 end
 
 function Base.view(ad::AnnData, I, J)
@@ -320,6 +322,7 @@ function Base.view(ad::AnnData, I, J)
         view(ad.varm, j),
         view(ad.varp, j, j),
         view(ad.layers, i, j),
+        ad.uns,
     )
 end
 function Base.view(ad::AnnDataView, I, J)

@@ -562,6 +562,8 @@ struct MuDataView{Ti, Tj} <: AbstractMuData
     varm::StrAlignedMappingView{Tuple{1 => 2}}
     varp::StrAlignedMappingView{Tuple{1 => 2, 2 => 2}}
     varmap::StrAlignedMappingView{Tuple{1 => 2}}
+
+    uns::Dict{<:AbstractString, <:Any}
 end
 
 function Base.view(mu::MuData, I, J)
@@ -589,6 +591,7 @@ function Base.view(mu::MuData, I, J)
         view(mu.varm, j),
         view(mu.varp, j, j),
         view(mu.varmap, j),
+        mu.uns,
     )
 end
 function Base.view(mu::MuDataView, I, J)
