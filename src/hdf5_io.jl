@@ -186,7 +186,7 @@ function write_impl(
             select!(data, Not(idxname))
         else
             @warn "Data frame $(HDF5.name(parent))/$name does not have an _index column, a row number index will be written"
-            index = 1:nrow(data)
+            index = collect(1:nrow(data))
         end
     end
     g = parent[name]
