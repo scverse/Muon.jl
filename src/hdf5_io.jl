@@ -23,6 +23,10 @@ end
 
 function read_matrix(f::HDF5.Dataset; kwargs...)
     mat = read(f)
+    if HDF5.h5t_get_class(datatype(f)) == HDF5.H5T_COMPOUND
+        return StructArray(mat)
+    end
+
     if ndims(f) == 0
         return mat
     end
@@ -102,6 +106,7 @@ function read_dict_of_mixed(f::HDF5.Group; kwargs...)
         String,
         Union{
             DataFrame,
+            StructArray,
             <:AbstractArray{<:Number},
             <:AbstractArray{<:AbstractString},
             <:AbstractString,
@@ -294,3 +299,28 @@ write_impl(
 
 write_impl(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, ::Nothing; kwargs...) =
     nothing
+
+function write_impl(
+    parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    data::StructArray;
+    extensible::Bool=false,
+    compress::UInt8=0x9,
+    kwargs...)
+    ety = eltype(data)
+    dtype = create_datatype(HDF5.H5T_COMPOUND, sizeof(ety))
+    for (i, (fname, ftype)) in enumerate(zip(fieldnames(ety), fieldtypes(ety)))
+        HDF5.h5t_insert(dtype, string(fname), fieldoffset(ety, i), datatype(ftype))
+    end
+    chunksize = HDF5.heuristic_chunk(data)
+    dset = create_dataset(parent, name, dtype, dataspace(size(data)), extensible=extensible, chunk=chunksize, compress=compress, kwargs...)
+    write_dataset(dset, dtype, Vector(data))
+end
+
+function datatype(::Type{T}) where {T <: AbstractString}
+    strdtype = HDF5.h5t_copy(HDF5.hdf5_type_id(T))
+    HDF5.h5t_set_size(strdtype, HDF5.H5T_VARIABLE)
+    HDF5.h5t_set_cset(strdtype, HDF5.H5T_CSET_UTF8)
+
+    HDF5.Datatype(strdtype)
+end

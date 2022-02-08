@@ -7,6 +7,7 @@ import LinearAlgebra: Adjoint
 using HDF5
 using DataFrames
 using CategoricalArrays
+using StructArrays
 import CompressHashDisplace: FrozenDict
 using FileIO
 
