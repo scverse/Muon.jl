@@ -242,10 +242,13 @@ function write_impl_array(
     name::AbstractString,
     data::AbstractArray{<:Number},
     dtype::HDF5.Datatype,
-    dims::Tuple{Vararg{<:Integer}},
+    dims::Union{Tuple{Vararg{<:Integer}}, Tuple{Tuple{Vararg{<:Integer, N}}, Tuple{Vararg{<:Integer, N}}}},
     compress::UInt8,
-)
+) where N
     chunksize = HDF5.heuristic_chunk(data)
+    if length(chunksize) == 0
+        chunksize = Tuple(100 for _ in 1:ndims(data))
+    end
     d = create_dataset(parent, name, dtype, dims, chunk=chunksize, compress=compress)
     write_dataset(d, dtype, data)
 end
@@ -256,9 +259,9 @@ function write_impl_array(
     name::AbstractString,
     data::AbstractArray{<:AbstractString},
     dtype::HDF5.Datatype,
-    dims::Tuple{Vararg{<:Integer}},
+    dims::Union{Tuple{Vararg{<:Integer}}, Tuple{Tuple{Vararg{<:Integer, N}}, Tuple{Vararg{<:Integer, N}}}},
     compress::UInt8,
-)
+) where N
     d = create_dataset(parent, name, dtype, dims)
     write_dataset(d, dtype, data)
 end
@@ -278,9 +281,9 @@ function write_impl(
     shape = collect(size(data))
     transposed && reverse!(shape)
     attrs["shape"] = shape
-    write(g, "indptr", data.colptr .- 1, extensible=true)
-    write(g, "indices", data.rowval .- 1, extensible=true)
-    write(g, "data", data.nzval, extensible=true)
+    write_impl(g, "indptr", data.colptr .- 1, extensible=true)
+    write_impl(g, "indices", data.rowval .- 1, extensible=true)
+    write_impl(g, "data", data.nzval, extensible=true)
 end
 
 write_impl(
@@ -310,15 +313,21 @@ function write_impl(
     ety = eltype(data)
     dtype = create_datatype(HDF5.H5T_COMPOUND, sizeof(ety))
     for (i, (fname, ftype)) in enumerate(zip(fieldnames(ety), fieldtypes(ety)))
-        HDF5.h5t_insert(dtype, string(fname), fieldoffset(ety, i), datatype(ftype))
+        HDF5.h5t_insert(dtype, string(fname), fieldoffset(ety, i), _datatype(ftype))
     end
     chunksize = HDF5.heuristic_chunk(data)
-    dset = create_dataset(parent, name, dtype, dataspace(size(data)), extensible=extensible, chunk=chunksize, compress=compress, kwargs...)
-    write_dataset(dset, dtype, Vector(data))
+    dims = size(data)
+    if extensible
+        dims = (size(data), Tuple(-1 for _ in 1:ndims(data)))
+    end
+    dset = create_dataset(parent, name, dtype, dataspace(dims), chunk=chunksize, compress=compress, kwargs...)
+    write_dataset(dset, dtype, [val for row in data for val in row])
 end
 
-function datatype(::Type{T}) where {T <: AbstractString}
-    strdtype = HDF5.h5t_copy(HDF5.hdf5_type_id(T))
+_datatype(::Type{T}) where T = datatype(T)
+
+function _datatype(::Type{T}) where {T <: AbstractString}
+    strdtype = HDF5.h5t_copy(HDF5.H5T_C_S1)
     HDF5.h5t_set_size(strdtype, HDF5.H5T_VARIABLE)
     HDF5.h5t_set_cset(strdtype, HDF5.H5T_CSET_UTF8)
 
