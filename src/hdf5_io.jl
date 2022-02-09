@@ -23,7 +23,7 @@ end
 
 function read_matrix(f::HDF5.Dataset; kwargs...)
     mat = read(f)
-    if HDF5.h5t_get_class(datatype(f)) == HDF5.H5T_COMPOUND
+    if HDF5.API.h5t_get_class(datatype(f)) == HDF5.API.H5T_COMPOUND
         return StructArray(mat)
     end
 
@@ -249,7 +249,7 @@ function write_impl_array(
     if length(chunksize) == 0
         chunksize = Tuple(100 for _ in 1:ndims(data))
     end
-    d = create_dataset(parent, name, dtype, dims, chunk=chunksize, compress=compress)
+    d = create_dataset(parent, name, dtype, dims, chunk=chunksize, deflate=compress)
     write_dataset(d, dtype, data)
 end
 
@@ -311,25 +311,25 @@ function write_impl(
     compress::UInt8=0x9,
     kwargs...)
     ety = eltype(data)
-    dtype = create_datatype(HDF5.H5T_COMPOUND, sizeof(ety))
+    dtype = create_datatype(HDF5.API.H5T_COMPOUND, sizeof(ety))
     for (i, (fname, ftype)) in enumerate(zip(fieldnames(ety), fieldtypes(ety)))
-        HDF5.h5t_insert(dtype, string(fname), fieldoffset(ety, i), _datatype(ftype))
+        HDF5.API.h5t_insert(dtype, string(fname), fieldoffset(ety, i), _datatype(ftype))
     end
     chunksize = HDF5.heuristic_chunk(data)
     dims = size(data)
     if extensible
         dims = (size(data), Tuple(-1 for _ in 1:ndims(data)))
     end
-    dset = create_dataset(parent, name, dtype, dataspace(dims), chunk=chunksize, compress=compress, kwargs...)
+    dset = create_dataset(parent, name, dtype, dataspace(dims), chunk=chunksize, deflate=compress, kwargs...)
     write_dataset(dset, dtype, [val for row in data for val in row])
 end
 
 _datatype(::Type{T}) where T = datatype(T)
 
 function _datatype(::Type{T}) where {T <: AbstractString}
-    strdtype = HDF5.h5t_copy(HDF5.H5T_C_S1)
-    HDF5.h5t_set_size(strdtype, HDF5.H5T_VARIABLE)
-    HDF5.h5t_set_cset(strdtype, HDF5.H5T_CSET_UTF8)
+    strdtype = HDF5.API.h5t_copy(HDF5.API.H5T_C_S1)
+    HDF5.API.h5t_set_size(strdtype, HDF5.API.H5T_VARIABLE)
+    HDF5.API.h5t_set_cset(strdtype, HDF5.API.H5T_CSET_UTF8)
 
     HDF5.Datatype(strdtype)
 end
