@@ -75,6 +75,14 @@ mutable struct MuData <: AbstractMuData
         for modality in mods
             mdata.mod[modality] = AnnData(file["mod"][modality], backed, checkversion)
         end
+        
+        modattr = attributes(file["mod"])
+        if haskey(modattr, "mod-order")
+            if issubset(mods, HDF5.read_attribute(file["mod"], "mod-order"))
+                # Dict is not ordered, do we need an OrderedDict? #13
+            end
+        end
+        
 
         return update!(mdata)
     end
@@ -189,6 +197,8 @@ function Base.write(parent::Union{HDF5.File, HDF5.Group}, mudata::AbstractMuData
             write(g, mod, adata)
         end
         write_metadata(parent, mudata)
+	g_attrs = attributes(g)
+	g_attrs["mod-order"] = collect(keys(mudata.mod))
     end
 end
 
