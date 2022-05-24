@@ -11,7 +11,7 @@ function read_dataframe(tablegroup::HDF5.Group; separate_index=true, kwargs...)
     df = DataFrame()
 
     for col in columns
-        column = read_matrix(tablegroup[col])
+        column = read_column(tablegroup[col])
         if sum(size(column) .> 1) > 1
             @warn "column $col has more than 1 dimension for data frame $(HDF5.name(tablegroup)), skipping"
         end
@@ -19,6 +19,17 @@ function read_dataframe(tablegroup::HDF5.Group; separate_index=true, kwargs...)
     end
 
     return df, rownames
+end
+
+function read_column(column::Union{HDF5.Group, HDF5.Dataset}; kwargs...)
+    #read(HDF5.Dataset) seems well handled natively
+    if isa(column, HDF5.Dataset); return read(column); end
+    #read(HDF5.Group) not so much
+    column = read(column)
+    levels = column["categories"]
+    column = column["codes"]
+    for (i, val) in enumerate(levels); column = replace(column, (i-1) => val); end
+    return categorical(column, levels=levels)
 end
 
 function read_matrix(f::HDF5.Dataset; kwargs...)
@@ -33,6 +44,7 @@ function read_matrix(f::HDF5.Dataset; kwargs...)
     if ndims(f) > 1
         mat = PermutedDimsArray(mat, ndims(mat):-1:1) # transpose for h5py compatibility
     end
+    # This if statement may be rendered redundant because of read_column
     if haskey(attributes(f), "categories")
         categories = f[read_attribute(f, "categories")]
         ordered =
@@ -93,6 +105,8 @@ function read_auto(f::HDF5.Group; kwargs...)
             return read_dataframe(f; kwargs...)
         elseif endswith(enctype, "matrix")
             return read_matrix(f; kwargs), nothing
+        elseif enctype == "dict"
+            return read_dict_of_mixed(f; kwargs...), nothing
         else
             error("unknown encoding $enctype")
         end

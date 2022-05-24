@@ -228,7 +228,12 @@ Base.size(adata::AbstractAnnData, d::Integer) = size(adata)[d]
 
 function Base.show(io::IO, adata::AbstractAnnData)
     compact = get(io, :compact, false)
-    print(io, """$(typeof(adata).name.name) object $(size(adata)[1]) \u2715 $(size(adata)[2])""")
+    names_obs = names(adata.obs)
+    names_var = names(adata.var)
+    names_uns = adata.uns |> keys |> collect
+    names_layers = adata[:,:].layers |> keys |> collect
+    print(io, """$(typeof(adata).name.name) object with n_obs \u2715 n_var: $(size(adata)[1]) \u2715 $(size(adata)[2])\
+    \n   obs: $names_obs\n   var: $names_var\n   uns: $names_uns\n   layers: $names_layers""")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", adata::AbstractAnnData)
