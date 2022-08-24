@@ -93,6 +93,8 @@ function read_auto(f::HDF5.Group; kwargs...)
             return read_dataframe(f; kwargs...)
         elseif endswith(enctype, "matrix")
             return read_matrix(f; kwargs), nothing
+        elseif enctype == "dict"
+            return read_dict_of_mixed(f; kwargs...), nothing
         else
             error("unknown encoding $enctype")
         end
