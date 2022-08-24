@@ -74,6 +74,17 @@ function read_matrix(f::HDF5.Group; kwargs...)
         end
         mat = SparseMatrixCSC(shape..., indptr, indices, data)
         return iscsr ? mat' : mat
+    elseif enctype == "categorical"
+        ordered = read_attribute(f, "ordered") > 0
+        categories = read(f, "categories")
+        codes = read(f, "codes") .+ 1
+
+        T = any(codes .== 0) ? Union{Missing, eltype(categories)} : eltype(categories)
+        mat = CategoricalVector{T}(
+            undef, length(codes); levels=categories, ordered=ordered)
+        copy!(mat.refs, codes)
+
+        return mat
     else
         error("unknown encoding $enctype")
     end
