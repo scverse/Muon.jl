@@ -167,10 +167,13 @@ function write_impl(
     data::CategoricalArray;
     kwargs...,
 )
-    write_impl(parent, name, data.refs .- 0x1; kwargs...)
-    write_impl(parent, "__categories/$name", levels(data); kwargs...)
-    attributes(parent["__categories/$name"])["ordered"] = UInt8(isordered(data))
-    attributes(parent[name])["categories"] = HDF5.Reference(parent["__categories"], name)
+    g = create_group(parent, name)
+    attrs = attributes(g)
+    attrs["encoding-type"] = "categorical"
+    attrs["encoding-version"] = "0.2.0"
+    _write_attribute(g, "ordered", isordered(data))
+    write_impl(g, "categories", levels(data); kwargs...)
+    write_impl(g, "codes", data.refs .- 1; kwargs...)
 end
 
 function write_impl(
@@ -212,14 +215,22 @@ end
 
 # see https://github.com/JuliaIO/HDF5.jl/issues/827
 # and https://github.com/JuliaIO/HDF5.jl/issues/826
-write_impl(
+function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
     data::Union{<:AbstractArray{Bool}, BitArray{1}};
     extensible::Bool=false,
     compress::UInt8=UInt8(9),
     kwargs...,
-) = write_impl(parent, name, Int8.(data); extensible=extensible, compress=compress, kwargs...)
+)
+    dtype = _datatype(Bool)
+    dspace = HDF5.API.h5s_create(HDF5.API.H5S_SCALAR)
+    dset = create_dataset(parent, name, dtype, dspace)
+
+    write_dataset(dset, dtype, UInt.(data))
+
+    # write_impl(parent, name, Int8.(data); extensible=extensible, compress=compress, kwargs...)
+end
 
 write_impl(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, data::SubArray; kwargs...) =
     write_impl(parent, name, copy(data); kwargs...)
@@ -343,4 +354,18 @@ function _datatype(::Type{T}) where {T <: AbstractString}
     HDF5.API.h5t_set_cset(strdtype, HDF5.API.H5T_CSET_UTF8)
 
     HDF5.Datatype(strdtype)
+end
+
+function _datatype(::Type{Bool})
+    dtype = create_datatype(HDF5.H5T_ENUM, sizeof(Bool))
+    HDF5.h5t_enum_insert(dtype, "FALSE", Ref(false))
+    HDF5.h5t_enum_insert(dtype, "TRUE", Ref(true))
+    return dtype
+end
+
+function _write_attribute(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, data::Bool)
+    dtype = _datatype(Bool)
+    dspace = HDF5.Dataspace(HDF5.API.h5s_create(HDF5.API.H5S_SCALAR))
+    attr = create_attribute(parent, name, dtype, dspace)
+    write_attribute(attr, dtype, data)
 end
