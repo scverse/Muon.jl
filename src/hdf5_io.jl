@@ -107,7 +107,7 @@ function read_auto(f::HDF5.Group; kwargs...)
         enctype = read_attribute(f, "encoding-type")
         if enctype == "dataframe"
             return read_dataframe(f; kwargs...)
-        elseif endswith(enctype, "matrix")
+        elseif endswith(enctype, "matrix") || enctype == "categorical"
             return read_matrix(f; kwargs), nothing
         elseif enctype == "dict"
             return read_dict_of_mixed(f; kwargs...), nothing
@@ -127,6 +127,8 @@ function read_dict_of_mixed(f::HDF5.Group; kwargs...)
             StructArray,
             <:AbstractArray{<:Number},
             <:AbstractArray{<:AbstractString},
+            <:CategoricalArray{<:Number},
+            <:CategoricalArray{<:AbstractString},
             <:AbstractString,
             <:Number,
             Dict,
@@ -148,10 +150,25 @@ end
 function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
-    data::Union{<:Number, <:AbstractString};
+    data::Union{<:Number};
     kwargs...,
 )
     parent[name] = data
+    attrs = attributes(parent[name])
+    attrs["encoding-type"] = "numeric-scalar"
+    attrs["encoding-version"] = "0.2.0"
+end
+
+function write_impl(
+    parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    data::Union{<:AbstractString};
+    kwargs...,
+)
+    parent[name] = data
+    attrs = attributes(parent[name])
+    attrs["encoding-type"] = "string"
+    attrs["encoding-version"] = "0.2.0"
 end
 
 function write_impl(
@@ -162,6 +179,9 @@ function write_impl(
 )
     if length(data) > 0
         g = create_group(parent, name)
+        attrs = attributes(g)
+        attrs["encoding-type"] = "dict"
+        attrs["encoding-version"] = "0.1.0"
         for (key, val) in data
             write_impl(g, key, val; kwargs...)
         end
@@ -273,6 +293,11 @@ function write_impl_array(
         chunksize = Tuple(100 for _ in 1:ndims(data))
     end
     d = create_dataset(parent, name, dtype, dims, chunk=chunksize, deflate=compress)
+
+    attrs = attributes(d)
+    attrs["encoding-type"] = "array"
+    attrs["encoding-version"] = "0.2.0"
+
     write_dataset(d, dtype, data)
 end
 
@@ -286,6 +311,11 @@ function write_impl_array(
     compress::UInt8,
 ) where N
     d = create_dataset(parent, name, dtype, dims)
+
+    attrs = attributes(d)
+    attrs["encoding-type"] = "string-array"
+    attrs["encoding-version"] = "0.2.0"
+
     write_dataset(d, dtype, data)
 end
 
