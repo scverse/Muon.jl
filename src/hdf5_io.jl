@@ -23,6 +23,11 @@ end
 
 function read_matrix(f::HDF5.Dataset; kwargs...)
     mat = read(f)
+
+    if datatype(f) == _datatype(Bool)
+        return BitArray(mat)
+    end
+
     if HDF5.API.h5t_get_class(datatype(f)) == HDF5.API.H5T_COMPOUND
         return StructArray(mat)
     end
@@ -188,7 +193,7 @@ function write_impl(
     g = create_group(parent, name)
     attrs = attributes(g)
     attrs["encoding-type"] = "dataframe"
-    attrs["encoding-version"] = "0.1.0"
+    attrs["encoding-version"] = "0.2.0"
     attrs["column-order"] = names(data)
 
     for (name, column) in pairs(eachcol(data))
@@ -215,27 +220,21 @@ function write_impl(
     attributes(g)["_index"] = idxname
 end
 
-# see https://github.com/JuliaIO/HDF5.jl/issues/827
-# and https://github.com/JuliaIO/HDF5.jl/issues/826
+write_impl(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, data::SubArray; kwargs...) =
+    write_impl(parent, name, copy(data); kwargs...)
+
 function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
-    data::Union{<:AbstractArray{Bool}, BitArray{1}};
+    data::BitArray,
+    ;
     extensible::Bool=false,
-    compress::UInt8=UInt8(9),
+    compress::UInt8=0x9,
     kwargs...,
 )
     dtype = _datatype(Bool)
-    dspace = HDF5.API.h5s_create(HDF5.API.H5S_SCALAR)
-    dset = create_dataset(parent, name, dtype, dspace)
-
-    write_dataset(dset, dtype, UInt.(data))
-
-    # write_impl(parent, name, Int8.(data); extensible=extensible, compress=compress, kwargs...)
+    write_impl_array(parent, name, Array{UInt8}(data), dtype, size(data), compress)
 end
-
-write_impl(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, data::SubArray; kwargs...) =
-    write_impl(parent, name, copy(data); kwargs...)
 
 function write_impl(
     parentgrp::Union{HDF5.File, HDF5.Group},
@@ -359,9 +358,9 @@ function _datatype(::Type{T}) where {T <: AbstractString}
 end
 
 function _datatype(::Type{Bool})
-    dtype = create_datatype(HDF5.H5T_ENUM, sizeof(Bool))
-    HDF5.h5t_enum_insert(dtype, "FALSE", Ref(false))
-    HDF5.h5t_enum_insert(dtype, "TRUE", Ref(true))
+    dtype = create_datatype(HDF5.API.H5T_ENUM, sizeof(Bool))
+    HDF5.API.h5t_enum_insert(dtype, "FALSE", Ref(false))
+    HDF5.API.h5t_enum_insert(dtype, "TRUE", Ref(true))
     return dtype
 end
 
