@@ -95,6 +95,18 @@ function read_matrix(f::HDF5.Group; kwargs...)
     end
 end
 
+function read_nullable_integer_array(f::HDF5.Group, kwargs...)
+    mask = read_matrix(f["mask"])
+    values = read(f["values"])
+    return [m ? missing : v for (m,v) in zip(mask, values)]
+end
+
+function read_nullable_boolean_array(f::HDF5.Group, kwargs...)
+    mask = read_matrix(f["mask"])
+    values = read(f["values"])
+    return [m ? missing : v!=0 for (m,v) in zip(mask, values)]
+end
+
 function read_dict_of_matrices(f::HDF5.Group; kwargs...)
     return Dict{String, AbstractArray{<:Number}}(
         key => read_matrix(f[key]; kwargs...) for key in keys(f)
@@ -111,6 +123,10 @@ function read_auto(f::HDF5.Group; kwargs...)
             return read_matrix(f; kwargs), nothing
         elseif enctype == "dict"
             return read_dict_of_mixed(f; kwargs...), nothing
+        elseif enctype == "nullable-integer"
+            return read_nullable_integer_array(f; kwargs...), nothing
+        elseif enctype == "nullable-boolean"
+            return read_nullable_boolean_array(f; kwargs...), nothing
         else
             error("unknown encoding $enctype")
         end
@@ -129,6 +145,8 @@ function read_dict_of_mixed(f::HDF5.Group; kwargs...)
             <:AbstractArray{<:AbstractString},
             <:CategoricalArray{<:Number},
             <:CategoricalArray{<:AbstractString},
+            <:AbstractArray{<:Union{Integer, Missing}},
+            <:AbstractArray{Union{Bool, Missing}},
             <:AbstractString,
             <:Number,
             Dict,
@@ -246,7 +264,7 @@ write_impl(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, data::Sub
 function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
-    data::BitArray,
+    data::Union{BitArray, AbstractArray{Bool}},
     ;
     extensible::Bool=false,
     compress::UInt8=0x9,
@@ -254,6 +272,38 @@ function write_impl(
 )
     dtype = _datatype(Bool)
     write_impl_array(parent, name, Array{UInt8}(data), dtype, size(data), compress)
+end
+
+function write_impl(
+    parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    data::AbstractArray{Union{Bool, Missing}};
+    kwargs...,
+)
+    g = create_group(parent, name)
+
+    attrs = attributes(g)
+    attrs["encoding-type"] = "nullable-boolean"
+    attrs["encoding-version"] = "0.1.0"
+
+    write_impl(g, "mask", ismissing.(data))
+    write_impl(g, "values", Bool[ismissing(v) ? 0 : v for v in data])
+end
+
+function write_impl(
+    parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    data::AbstractArray{Union{T, Missing}};
+    kwargs...,
+) where {T<:Integer}
+    g = create_group(parent, name)
+
+    attrs = attributes(g)
+    attrs["encoding-type"] = "nullable-integer"
+    attrs["encoding-version"] = "0.1.0"
+
+    write_impl(g, "mask", ismissing.(data))
+    write_impl(g, "values", T[ismissing(v) ? 0 : v for v in data])
 end
 
 function write_impl(
