@@ -9,6 +9,7 @@ using DataFrames
 using CategoricalArrays
 using StructArrays
 import CompressHashDisplace: FrozenDict
+import OrderedCollections: OrderedDict
 using FileIO
 
 export readh5mu, readh5ad, writeh5mu, writeh5ad, isbacked, update_obs!, update_var!, update!
