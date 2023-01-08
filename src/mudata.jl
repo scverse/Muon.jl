@@ -70,20 +70,25 @@ mutable struct MuData <: AbstractMuData
             Dict{String, Any}()
 
         # Modalities
-        mdata.mod = Dict{String, AnnData}()
+        mdata.mod = OrderedDict{String, AnnData}()
         mods = HDF5.keys(file["mod"])
+        
+        modattr = attributes(file["mod"])
+        mod_order = HDF5.read_attribute(file["mod"], "mod-order")
+        if haskey(modattr, "mod-order")
+            if issubset(mods, mod_order)
+                # Dict is not ordered, do we need an OrderedDict? #13
+                for modality in mod_order
+                    mdata.mod[modality] = AnnData(file["mod"][modality], backed, checkversion)
+                end
+                return update!(mdata)
+            end
+        end
+
+        # no mod-order or not all modalities are in mod-order (then mod-order is ignored) 
         for modality in mods
             mdata.mod[modality] = AnnData(file["mod"][modality], backed, checkversion)
         end
-        
-        modattr = attributes(file["mod"])
-        if haskey(modattr, "mod-order")
-            if issubset(mods, HDF5.read_attribute(file["mod"], "mod-order"))
-                # Dict is not ordered, do we need an OrderedDict? #13
-            end
-        end
-        
-
         return update!(mdata)
     end
 
