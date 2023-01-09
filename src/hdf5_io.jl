@@ -23,6 +23,11 @@ end
 
 function read_matrix(f::HDF5.Dataset; kwargs...)
     mat = read(f)
+
+    if datatype(f) == _datatype(Bool)
+        return BitArray(mat)
+    end
+
     if HDF5.API.h5t_get_class(datatype(f)) == HDF5.API.H5T_COMPOUND
         return StructArray(mat)
     end
@@ -74,9 +79,32 @@ function read_matrix(f::HDF5.Group; kwargs...)
         end
         mat = SparseMatrixCSC(shape..., indptr, indices, data)
         return iscsr ? mat' : mat
+    elseif enctype == "categorical"
+        ordered = read_attribute(f, "ordered") > 0
+        categories = read(f, "categories")
+        codes = read(f, "codes") .+ 1
+
+        T = any(codes .== 0) ? Union{Missing, eltype(categories)} : eltype(categories)
+        mat = CategoricalVector{T}(
+            undef, length(codes); levels=categories, ordered=ordered)
+        copy!(mat.refs, codes)
+
+        return mat
     else
         error("unknown encoding $enctype")
     end
+end
+
+function read_nullable_integer_array(f::HDF5.Group, kwargs...)
+    mask = read_matrix(f["mask"])
+    values = read(f["values"])
+    return [m ? missing : v for (m,v) in zip(mask, values)]
+end
+
+function read_nullable_boolean_array(f::HDF5.Group, kwargs...)
+    mask = read_matrix(f["mask"])
+    values = read(f["values"])
+    return [m ? missing : v!=0 for (m,v) in zip(mask, values)]
 end
 
 function read_dict_of_matrices(f::HDF5.Group; kwargs...)
@@ -91,8 +119,14 @@ function read_auto(f::HDF5.Group; kwargs...)
         enctype = read_attribute(f, "encoding-type")
         if enctype == "dataframe"
             return read_dataframe(f; kwargs...)
-        elseif endswith(enctype, "matrix")
+        elseif endswith(enctype, "matrix") || enctype == "categorical"
             return read_matrix(f; kwargs), nothing
+        elseif enctype == "dict"
+            return read_dict_of_mixed(f; kwargs...), nothing
+        elseif enctype == "nullable-integer"
+            return read_nullable_integer_array(f; kwargs...), nothing
+        elseif enctype == "nullable-boolean"
+            return read_nullable_boolean_array(f; kwargs...), nothing
         else
             error("unknown encoding $enctype")
         end
@@ -109,6 +143,10 @@ function read_dict_of_mixed(f::HDF5.Group; kwargs...)
             StructArray,
             <:AbstractArray{<:Number},
             <:AbstractArray{<:AbstractString},
+            <:CategoricalArray{<:Number},
+            <:CategoricalArray{<:AbstractString},
+            <:AbstractArray{<:Union{Integer, Missing}},
+            <:AbstractArray{Union{Bool, Missing}},
             <:AbstractString,
             <:Number,
             Dict,
@@ -130,10 +168,25 @@ end
 function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
-    data::Union{<:Number, <:AbstractString};
+    data::Union{<:Number};
     kwargs...,
 )
     parent[name] = data
+    attrs = attributes(parent[name])
+    attrs["encoding-type"] = "numeric-scalar"
+    attrs["encoding-version"] = "0.2.0"
+end
+
+function write_impl(
+    parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    data::Union{<:AbstractString};
+    kwargs...,
+)
+    parent[name] = data
+    attrs = attributes(parent[name])
+    attrs["encoding-type"] = "string"
+    attrs["encoding-version"] = "0.2.0"
 end
 
 function write_impl(
@@ -144,6 +197,9 @@ function write_impl(
 )
     if length(data) > 0
         g = create_group(parent, name)
+        attrs = attributes(g)
+        attrs["encoding-type"] = "dict"
+        attrs["encoding-version"] = "0.1.0"
         for (key, val) in data
             write_impl(g, key, val; kwargs...)
         end
@@ -156,10 +212,13 @@ function write_impl(
     data::CategoricalArray;
     kwargs...,
 )
-    write_impl(parent, name, data.refs .- 0x1; kwargs...)
-    write_impl(parent, "__categories/$name", levels(data); kwargs...)
-    attributes(parent["__categories/$name"])["ordered"] = UInt8(isordered(data))
-    attributes(parent[name])["categories"] = HDF5.Reference(parent["__categories"], name)
+    g = create_group(parent, name)
+    attrs = attributes(g)
+    attrs["encoding-type"] = "categorical"
+    attrs["encoding-version"] = "0.2.0"
+    _write_attribute(g, "ordered", isordered(data))
+    write_impl(g, "categories", levels(data); kwargs...)
+    write_impl(g, "codes", data.refs .- 1; kwargs...)
 end
 
 function write_impl(
@@ -172,7 +231,7 @@ function write_impl(
     g = create_group(parent, name)
     attrs = attributes(g)
     attrs["encoding-type"] = "dataframe"
-    attrs["encoding-version"] = "0.1.0"
+    attrs["encoding-version"] = "0.2.0"
     attrs["column-order"] = names(data)
 
     for (name, column) in pairs(eachcol(data))
@@ -199,19 +258,53 @@ function write_impl(
     attributes(g)["_index"] = idxname
 end
 
-# see https://github.com/JuliaIO/HDF5.jl/issues/827
-# and https://github.com/JuliaIO/HDF5.jl/issues/826
-write_impl(
-    parent::Union{HDF5.File, HDF5.Group},
-    name::AbstractString,
-    data::Union{<:AbstractArray{Bool}, BitArray{1}};
-    extensible::Bool=false,
-    compress::UInt8=UInt8(9),
-    kwargs...,
-) = write_impl(parent, name, Int8.(data); extensible=extensible, compress=compress, kwargs...)
-
 write_impl(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, data::SubArray; kwargs...) =
     write_impl(parent, name, copy(data); kwargs...)
+
+function write_impl(
+    parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    data::Union{BitArray, AbstractArray{Bool}},
+    ;
+    extensible::Bool=false,
+    compress::UInt8=0x9,
+    kwargs...,
+)
+    dtype = _datatype(Bool)
+    write_impl_array(parent, name, Array{UInt8}(data), dtype, size(data), compress)
+end
+
+function write_impl(
+    parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    data::AbstractArray{Union{Bool, Missing}};
+    kwargs...,
+)
+    g = create_group(parent, name)
+
+    attrs = attributes(g)
+    attrs["encoding-type"] = "nullable-boolean"
+    attrs["encoding-version"] = "0.1.0"
+
+    write_impl(g, "mask", ismissing.(data))
+    write_impl(g, "values", Bool[ismissing(v) ? 0 : v for v in data])
+end
+
+function write_impl(
+    parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    data::AbstractArray{Union{T, Missing}};
+    kwargs...,
+) where {T<:Integer}
+    g = create_group(parent, name)
+
+    attrs = attributes(g)
+    attrs["encoding-type"] = "nullable-integer"
+    attrs["encoding-version"] = "0.1.0"
+
+    write_impl(g, "mask", ismissing.(data))
+    write_impl(g, "values", T[ismissing(v) ? 0 : v for v in data])
+end
 
 function write_impl(
     parentgrp::Union{HDF5.File, HDF5.Group},
@@ -250,6 +343,11 @@ function write_impl_array(
         chunksize = Tuple(100 for _ in 1:ndims(data))
     end
     d = create_dataset(parent, name, dtype, dims, chunk=chunksize, deflate=compress)
+
+    attrs = attributes(d)
+    attrs["encoding-type"] = "array"
+    attrs["encoding-version"] = "0.2.0"
+
     write_dataset(d, dtype, data)
 end
 
@@ -263,6 +361,11 @@ function write_impl_array(
     compress::UInt8,
 ) where N
     d = create_dataset(parent, name, dtype, dims)
+
+    attrs = attributes(d)
+    attrs["encoding-type"] = "string-array"
+    attrs["encoding-version"] = "0.2.0"
+
     write_dataset(d, dtype, data)
 end
 
@@ -332,4 +435,18 @@ function _datatype(::Type{T}) where {T <: AbstractString}
     HDF5.API.h5t_set_cset(strdtype, HDF5.API.H5T_CSET_UTF8)
 
     HDF5.Datatype(strdtype)
+end
+
+function _datatype(::Type{Bool})
+    dtype = create_datatype(HDF5.API.H5T_ENUM, sizeof(Bool))
+    HDF5.API.h5t_enum_insert(dtype, "FALSE", Ref(false))
+    HDF5.API.h5t_enum_insert(dtype, "TRUE", Ref(true))
+    return dtype
+end
+
+function _write_attribute(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, data::Bool)
+    dtype = _datatype(Bool)
+    dspace = HDF5.Dataspace(HDF5.API.h5s_create(HDF5.API.H5S_SCALAR))
+    attr = create_attribute(parent, name, dtype, dspace)
+    write_attribute(attr, dtype, data)
 end

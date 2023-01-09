@@ -190,7 +190,7 @@ end
 
 function Base.write(parent::Union{HDF5.File, HDF5.Group}, adata::AbstractAnnData)
     attrs = attributes(parent)
-    attrs["encoding-type"] = "AnnData"
+    attrs["encoding-type"] = "anndata"
     attrs["encoding-version"] = string(ANNDATAVERSION)
     attrs["encoder"] = NAME
     attrs["encoder-version"] = string(VERSION)
