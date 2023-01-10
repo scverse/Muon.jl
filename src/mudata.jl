@@ -77,11 +77,12 @@ mutable struct MuData <: AbstractMuData
         mod_order = HDF5.read_attribute(file["mod"], "mod-order")
         if haskey(modattr, "mod-order")
             if issubset(mods, mod_order)
-                # Dict is not ordered, do we need an OrderedDict? #13
                 for modality in mod_order
                     mdata.mod[modality] = AnnData(file["mod"][modality], backed, checkversion)
                 end
                 return update!(mdata)
+            else
+                @warn "Modality order attribute has some of the modalities missing and will be ignored"
             end
         end
 
