@@ -13,7 +13,7 @@ mutable struct Index{T, V} <: AbstractIndex{T, V}
     function Index{T}(nelements::Integer) where {T}
         size = ceil(nelements / 0.9) # 0.9 load factor
 
-        mintype = minimum_unsigned_type_for_n(nelements)
+        mintype = minimum_unsigned_type_for_n(size)
         return new{T, mintype}(
             Vector{T}(undef, nelements),
             zeros(mintype, mintype(size)),
