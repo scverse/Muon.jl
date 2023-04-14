@@ -18,7 +18,7 @@ mutable struct MuData <: AbstractMuData
 
     uns::Dict{<:AbstractString, <:Any}
 
-    function MuData(file::Union{HDF5.File, HDF5.Group}, backed=true, checkversion=true)
+    function MuData(file::Union{HDF5.File, HDF5.Group}, backed=false, checkversion=true)
         if checkversion
             attrs = attributes(file)
             if !haskey(attrs, "encoding-type")
@@ -141,7 +141,7 @@ end
 
 file(mu::MuData) = mu.file
 
-function readh5mu(filename::AbstractString; backed=true)
+function readh5mu(filename::AbstractString; backed=false)
     filename = abspath(filename) # this gets stored in the HDF5 objects for backed datasets
     if String(read(filename, 6)) != "MuData"
         if HDF5.ishdf5(filename)
