@@ -24,12 +24,12 @@ end
 function read_matrix(f::HDF5.Dataset; kwargs...)
     mat = read(f)
 
-    if datatype(f) == _datatype(Bool)
-        return BitArray(mat)
-    end
-
     if HDF5.API.h5t_get_class(datatype(f)) == HDF5.API.H5T_COMPOUND
         return StructArray(mat)
+    end
+
+    if datatype(f) == _datatype(Bool)
+        mat = BitArray(mat)
     end
 
     if ndims(f) == 0

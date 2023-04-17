@@ -30,7 +30,8 @@ tmp = mktempdir()
         (Dict("a" => 1),     "dict",           "0.1.0"),
         ([1,2,missing,3],           "nullable-integer", "0.1.0"),
         ([true,false,missing,true], "nullable-boolean", "0.1.0"),
-        (BitVector([true,false,true]),           "array",       "0.2.0"),
+        (BitVector([true,false,true]),                  "array",       "0.2.0"),
+        (BitMatrix([true false true;false true false]), "array",       "0.2.0"),
         (CategoricalArray(["a", "b", "a", "a"]), "categorical", "0.2.0"),
         (CategoricalArray([1, 1, 2, 1]),         "categorical", "0.2.0"),
     ]
