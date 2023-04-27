@@ -21,7 +21,7 @@ mutable struct AnnData <: AbstractAnnData
 
     uns::Dict{<:AbstractString, <:Any}
 
-    function AnnData(file::Union{HDF5.File, HDF5.Group}, backed=true, checkversion=true)
+    function AnnData(file::Union{HDF5.File, HDF5.Group}, backed=false, checkversion=true)
         if checkversion
             attrs = attributes(file)
             if !haskey(attrs, "encoding-type")
@@ -138,7 +138,7 @@ end
 
 file(ad::AnnData) = ad.file
 
-function readh5ad(filename::AbstractString; backed=true)
+function readh5ad(filename::AbstractString; backed=false)
     filename = abspath(filename) # this gets stored in the HDF5 objects for backed datasets
     if !backed
         fid = h5open(filename, "r")
