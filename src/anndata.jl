@@ -158,12 +158,12 @@ function readh5ad(filename::AbstractString; backed=false)
     return adata
 end
 
-function writeh5ad(filename::AbstractString, adata::AbstractAnnData)
+function writeh5ad(filename::AbstractString, adata::AbstractAnnData; compress::UInt8=0x9)
     filename = abspath(filename)
     if file(adata) === nothing || filename != HDF5.filename(file(adata))
         hfile = h5open(filename, "w", userblock=512)
         try
-            write(hfile, adata)
+            write(hfile, adata, compress=compress)
             close(hfile)
             hfile = open(filename, "r+")
             write(
@@ -174,7 +174,7 @@ function writeh5ad(filename::AbstractString, adata::AbstractAnnData)
             close(hfile)
         end
     else
-        write(adata)
+        write(adata, compress=compress)
     end
     return nothing
 end
@@ -182,46 +182,47 @@ end
 function Base.write(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
-    adata::AbstractAnnData,
+    adata::AbstractAnnData;
+    compress::UInt8=0x9
 )
     g = create_group(parent, name)
-    write(g, adata)
+    write(g, adata, compress=compress)
 end
 
-function Base.write(parent::Union{HDF5.File, HDF5.Group}, adata::AbstractAnnData)
+function Base.write(parent::Union{HDF5.File, HDF5.Group}, adata::AbstractAnnData; compress::UInt8=0x9)
     attrs = attributes(parent)
     attrs["encoding-type"] = "anndata"
     attrs["encoding-version"] = string(ANNDATAVERSION)
     attrs["encoder"] = NAME
     attrs["encoder-version"] = string(VERSION)
     if parent === file(adata)
-        write(adata)
+        write(adata, compress=compress)
     else
-        write_attr(parent, "X", adata.X)
-        write_attr(parent, "layers", adata.layers)
-        write_metadata(parent, adata)
+        write_attr(parent, "X", adata.X, compress=compress)
+        write_attr(parent, "layers", adata.layers, compress=compress)
+        write_metadata(parent, adata, compress=compress)
     end
 end
 
-function Base.write(adata)
+function Base.write(adata; compress::UInt8=0x9)
     if file(adata) === nothing
         error("adata is not backed, need somewhere to write to")
     end
-    write_metadata(file(adata), adata)
+    write_metadata(file(adata), adata, compress=compress)
 end
 
-function write_metadata(parent::Union{HDF5.File, HDF5.Group}, adata::AbstractAnnData)
-    write_attr(parent, "obs", adata.obs, index=adata.obs_names)
-    write_attr(parent, "obsm", adata.obsm, index=adata.obs_names)
-    write_attr(parent, "obsp", adata.obsp)
-    write_attr(parent, "var", adata.var, index=adata.var_names)
-    write_attr(parent, "varm", adata.varm, index=adata.var_names)
-    write_attr(parent, "varp", adata.varp)
-    write_attr(parent, "uns", adata.uns)
+function write_metadata(parent::Union{HDF5.File, HDF5.Group}, adata::AbstractAnnData; compress::UInt8=0x9)
+    write_attr(parent, "obs", adata.obs, index=adata.obs_names, compress=compress)
+    write_attr(parent, "obsm", adata.obsm, index=adata.obs_names, compress=compress)
+    write_attr(parent, "obsp", adata.obsp, compress=compress)
+    write_attr(parent, "var", adata.var, index=adata.var_names, compress=compress)
+    write_attr(parent, "varm", adata.varm, index=adata.var_names, compress=compress)
+    write_attr(parent, "varp", adata.varp, compress=compress)
+    write_attr(parent, "uns", adata.uns, compress=compress)
 end
 # FileIO support
-load(f::File{format"h5ad"}) = readh5ad(filename(f), backed=false) # I suppose this is more consistent with the rest of FileIO?
-save(f::File{format"h5ad"}, data::AbstractAnnData) = writeh5ad(filename(f), data)
+load(f::File{format"h5ad"}; backed::Bool=false) = readh5ad(filename(f), backed=backed)
+save(f::File{format"h5ad"}, data::AbstractAnnData; compress::UInt8=0x9) = writeh5ad(filename(f), data, compress=compress)
 
 Base.size(adata::AbstractAnnData) = (length(adata.obs_names), length(adata.var_names))
 Base.size(adata::AbstractAnnData, d::Integer) = size(adata)[d]

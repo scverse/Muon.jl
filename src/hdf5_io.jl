@@ -338,11 +338,15 @@ function write_impl_array(
     dims::Union{Tuple{Vararg{<:Integer}}, Tuple{Tuple{Vararg{<:Integer, N}}, Tuple{Vararg{<:Integer, N}}}},
     compress::UInt8,
 ) where N
-    chunksize = HDF5.heuristic_chunk(data)
-    if length(chunksize) == 0
-        chunksize = Tuple(100 for _ in 1:ndims(data))
+    if compress > 0x0
+        chunksize = HDF5.heuristic_chunk(data)
+        if length(chunksize) == 0
+            chunksize = Tuple(100 for _ in 1:ndims(data))
+        end
+        d = create_dataset(parent, name, dtype, dims, chunk=chunksize, deflate=compress)
+    else
+        d = create_dataset(parent, name, dtype, dims)
     end
-    d = create_dataset(parent, name, dtype, dims, chunk=chunksize, deflate=compress)
 
     attrs = attributes(d)
     attrs["encoding-type"] = "array"

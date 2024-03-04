@@ -168,12 +168,12 @@ function readh5mu(filename::AbstractString; backed=false)
     return mdata
 end
 
-function writeh5mu(filename::AbstractString, mudata::AbstractMuData)
+function writeh5mu(filename::AbstractString, mudata::AbstractMuData; compress::UInt8=0x9)
     filename = abspath(filename)
     if file(mudata) === nothing || filename != HDF5.filename(file(mudata))
         hfile = h5open(filename, "w", userblock=512)
         try
-            write(hfile, mudata)
+            write(hfile, mudata, compress=compress)
             close(hfile)
             hfile = open(filename, "r+")
             write(
@@ -184,55 +184,55 @@ function writeh5mu(filename::AbstractString, mudata::AbstractMuData)
             close(hfile)
         end
     else
-        write(mudata)
+        write(mudata, compress=compress)
     end
     return nothing
 end
 
-function Base.write(parent::Union{HDF5.File, HDF5.Group}, mudata::AbstractMuData)
+function Base.write(parent::Union{HDF5.File, HDF5.Group}, mudata::AbstractMuData; compress::UInt8=0x9)
     attrs = attributes(parent)
     attrs["encoding-type"] = "MuData"
     attrs["encoding-version"] = string(MUDATAVERSION)
     attrs["encoder"] = NAME
     attrs["encoder-version"] = string(VERSION)
     if parent === file(mudata)
-        write(mudata)
+        write(mudata, compress=compress)
     else
         g = create_group(parent, "mod")
         for (mod, adata) in mudata.mod
-            write(g, mod, adata)
+            write(g, mod, adata, compress=compress)
         end
-        write_metadata(parent, mudata)
+        write_metadata(parent, mudata, compress=compress)
 	g_attrs = attributes(g)
 	g_attrs["mod-order"] = collect(keys(mudata.mod))
     end
 end
 
-function Base.write(mudata::AbstractMuData)
+function Base.write(mudata::AbstractMuData; compress::UInt8=0x9)
     if isnothing(file(mudata))
         error("mudata is not backed, need somewhere to write to")
     end
     for adata in values(mudata.mod)
-        write(adata)
+        write(adata, compress=compress)
     end
-    write_metadata(mudata.file, mudata)
+    write_metadata(mudata.file, mudata, compress=compress)
 end
 
-function write_metadata(parent::Union{HDF5.File, HDF5.Group}, mudata::AbstractMuData)
-    write_attr(parent, "obs", shrink_attr(mudata, :obs), index=mudata.obs_names)
-    write_attr(parent, "obsm", mudata.obsm, index=mudata.obs_names)
-    write_attr(parent, "obsp", mudata.obsp)
-    write_attr(parent, "obsmap", mudata.obsmap)
-    write_attr(parent, "var", shrink_attr(mudata, :var), index=mudata.var_names)
-    write_attr(parent, "varm", mudata.varm, index=mudata.var_names)
-    write_attr(parent, "varp", mudata.varp)
-    write_attr(parent, "varmap", mudata.varmap)
-    write_attr(parent, "uns", mudata.uns)
+function write_metadata(parent::Union{HDF5.File, HDF5.Group}, mudata::AbstractMuData; compress::UInt8=0x9)
+    write_attr(parent, "obs", shrink_attr(mudata, :obs), index=mudata.obs_names, compress=compress)
+    write_attr(parent, "obsm", mudata.obsm, index=mudata.obs_names, compress=compress)
+    write_attr(parent, "obsp", mudata.obsp, compress=compress)
+    write_attr(parent, "obsmap", mudata.obsmap, compress=compress)
+    write_attr(parent, "var", shrink_attr(mudata, :var), index=mudata.var_names, compress=compress)
+    write_attr(parent, "varm", mudata.varm, index=mudata.var_names, compress=compress)
+    write_attr(parent, "varp", mudata.varp, compress=compress)
+    write_attr(parent, "varmap", mudata.varmap, compress=compress)
+    write_attr(parent, "uns", mudata.uns, compress=compress)
 end
 
 # FileIO support
-load(f::File{format"h5mu"}) = readh5mu(filename(f), backed=false) # I suppose this is more consistent with the rest of FileIO?
-save(f::File{format"h5mu"}, data::AbstractMuData) = writeh5mu(filename(f), data)
+load(f::File{format"h5mu"}; backed::Bool=false) = readh5mu(filename(f), backed=backed)
+save(f::File{format"h5mu"}, data::AbstractMuData; compress::UInt8=0x9) = writeh5mu(filename(f), data, compress=compress)
 
 Base.size(mdata::AbstractMuData) = (length(mdata.obs_names), length(mdata.var_names))
 Base.size(mdata::AbstractMuData, d::Integer) = size(mdata)[d]
