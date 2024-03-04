@@ -30,6 +30,11 @@ HDF5.copy_object(
     dst_path::AbstractString,
 ) = copy_object(src_obj.dset, dst_parent, dst_path)
 HDF5.isvalid(dset::TransposedDataset) = isvalid(dset.dset)
+function HDF5.readmmap(dset::TransposedDataset, ::Type{T}) where {T}
+    return HDF5.readmmap(dset.dset, T)'
+end
+HDF5.ismmappable(dset::TransposedDataset) = HDF5.ismmappable(dset.dset)
+HDF5.iscontiguous(dset::TransposedDataset) = HDF5.iscontiguous(dset.dset)
 
 Base.to_index(A::HDF5.Dataset, I::AbstractUnitRange{<:Unsigned}) =
     Base.to_index(A, UnitRange{Int}(I)) # hyperslab only supports Int indexes
