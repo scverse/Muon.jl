@@ -338,7 +338,7 @@ function write_impl_array(
     dims::Union{Tuple{Vararg{<:Integer}}, Tuple{Tuple{Vararg{<:Integer, N}}, Tuple{Vararg{<:Integer, N}}}},
     compress::UInt8,
 ) where N
-    if compress > 0x0
+    if compress > 0x0 && ndims(data) > 0
         chunksize = HDF5.heuristic_chunk(data)
         if length(chunksize) == 0
             chunksize = Tuple(100 for _ in 1:ndims(data))
