@@ -38,7 +38,7 @@ ad.obsm["X_svd"] = f.U * Diagonal(f.S);
 
 When data is assigned, it is verified first that the dimensions match:
 
-```@example 1
+```@raw julia
 ad.obsm["X_Vt"] = f.Vt  # won't work
 # => DimensionMismatch
 ```
