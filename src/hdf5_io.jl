@@ -422,12 +422,16 @@ function write_impl(
     for (i, (fname, ftype)) in enumerate(zip(fieldnames(ety), fieldtypes(ety)))
         HDF5.API.h5t_insert(dtype, string(fname), fieldoffset(ety, i), _datatype(ftype))
     end
-    chunksize = HDF5.heuristic_chunk(data)
-    dims = size(data)
-    if extensible
-        dims = (size(data), Tuple(-1 for _ in 1:ndims(data)))
+    if compress > 0x0 && ndims(data) > 0
+        chunksize = HDF5.heuristic_chunk(data)
+        dims = size(data)
+        if extensible
+            dims = (size(data), Tuple(-1 for _ in 1:ndims(data)))
+        end
+        dset = create_dataset(parent, name, dtype, dataspace(dims), chunk=chunksize, shuffle=true, deflate=compress, kwargs...)
+    else
+        dset = create_dataset(parent, name, dtype, dataspace(dims), chunk=chunksize, kwargs...)
     end
-    dset = create_dataset(parent, name, dtype, dataspace(dims), chunk=chunksize, deflate=compress, kwargs...)
     write_dataset(dset, dtype, [val for row in data for val in row])
 end
 
