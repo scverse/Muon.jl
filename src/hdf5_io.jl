@@ -343,7 +343,7 @@ function write_impl_array(
         if length(chunksize) == 0
             chunksize = Tuple(100 for _ in 1:ndims(data))
         end
-        d = create_dataset(parent, name, dtype, dims, chunk=chunksize, deflate=compress)
+        d = create_dataset(parent, name, dtype, dims, chunk=chunksize, shuffle=true, deflate=compress)
     else
         d = create_dataset(parent, name, dtype, dims)
     end
