@@ -1,6 +1,6 @@
 
 
-using CategoricalArrays
+using PooledArrays
 using HDF5
 
 tmp = mktempdir()
@@ -32,8 +32,8 @@ tmp = mktempdir()
         ([true,false,missing,true], "nullable-boolean", "0.1.0"),
         (BitVector([true,false,true]),                  "array",       "0.2.0"),
         (BitMatrix([true false true;false true false]), "array",       "0.2.0"),
-        (CategoricalArray(["a", "b", "a", "a"]), "categorical", "0.2.0"),
-        (CategoricalArray([1, 1, 2, 1]),         "categorical", "0.2.0"),
+        (PooledArray(["a", "b", "a", "a"]), "categorical", "0.2.0"),
+        (PooledArray([1, 1, 2, 1]),         "categorical", "0.2.0"),
     ]
 
     for args in enc_tests
@@ -53,8 +53,8 @@ end
         "d" => 1,
         "e" => true,
         "f" => "a",
-        "g" => CategoricalArray(["a", "b", "a", "a"]),
-        "h" => CategoricalArray([1, 1, 2, 1]),
+        "g" => PooledArray(["a", "b", "a", "a"]; compress=true, signed=true),
+        "h" => PooledArray([1, 1, 2, 1]),
         "i" => [1,2,missing,3],
         "k" => [true,false,missing,true]
     )

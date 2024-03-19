@@ -8,6 +8,7 @@ using HDF5
 using DataFrames
 using CategoricalArrays
 using StructArrays
+using PooledArrays
 import CompressHashDisplace: FrozenDict
 import OrderedCollections: OrderedDict
 using FileIO

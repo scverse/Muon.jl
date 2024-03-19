@@ -45,12 +45,21 @@ function read_matrix(f::HDF5.Dataset; kwargs...)
             read_attribute(categories, "ordered") == true
         cats = read(categories)
         mat .+= 1
-        mat = compress(
-            CategoricalArray{eltype(cats), ndims(mat)}(
-                mat,
-                CategoricalPool{eltype(cats), eltype(mat)}(cats, ordered),
-            ),
-        )
+        mat = if ordered
+            compress(
+                CategoricalArray{eltype(cats), ndims(mat)}(
+                    mat,
+                    CategoricalPool{eltype(cats), eltype(mat)}(cats, ordered),
+                ),
+            )
+        else
+            PooledArray(
+                PooledArrays.RefArray(mat),
+                Dict{eltype(cats), eltype(mat)}(
+                    v => i for (i, v) in enumerate(cats)
+                )
+            )
+        end
     end
     return mat
 end
@@ -84,11 +93,18 @@ function read_matrix(f::HDF5.Group; kwargs...)
         categories = read(f, "categories")
         codes = read(f, "codes") .+ true
 
-        T = any(codes .== 0) ? Union{Missing, eltype(categories)} : eltype(categories)
-        mat = CategoricalVector{T}(
-            undef, length(codes); levels=categories, ordered=ordered)
-        copy!(mat.refs, codes)
-
+        T = any(iszero, codes) ? Union{Missing, eltype(categories)} : eltype(categories)
+        mat = if ordered
+            CategoricalVector{T}(
+                undef, length(codes); levels=categories, ordered=ordered
+            )
+            copy!(mat.refs, codes)
+        else
+            PooledArray(
+                PooledArrays.RefArray(codes),
+                Dict{T, eltype(codes)}(v => i for (i, v) in enumerate(categories)),
+            )
+        end
         return mat
     else
         error("unknown encoding $enctype")
@@ -209,14 +225,14 @@ end
 function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
-    data::CategoricalArray;
+    data::Union{CategoricalArray,PooledArray};
     kwargs...,
 )
     g = create_group(parent, name)
     attrs = attributes(g)
     attrs["encoding-type"] = "categorical"
     attrs["encoding-version"] = "0.2.0"
-    _write_attribute(g, "ordered", isordered(data))
+    _write_attribute(g, "ordered", isa(data, CategoricalArray) && isordered(data))
     write_impl(g, "categories", levels(data); kwargs...)
     write_impl(g, "codes", data.refs .- true; kwargs...)
 end
