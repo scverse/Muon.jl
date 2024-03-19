@@ -91,7 +91,7 @@ function Base.getindex(dset::SparseDataset, I::AbstractUnitRange, J::AbstractUni
     newdata = Vector{eltype(dset)}()
     for (nc, c) in enumerate(J)
         c1, c2 = colptr[c] + 1, colptr[c + 1]
-        currrows = rows[c1:c2] .+ convert(eltype(rows), 1)
+        currrows = rows[c1:c2] .+ true
         rowidx = findall(x -> x ∈ I, currrows)
         newcols[nc + 1] = newcols[nc] + length(rowidx)
 
@@ -99,7 +99,7 @@ function Base.getindex(dset::SparseDataset, I::AbstractUnitRange, J::AbstractUni
             currdata = data[c1:c2][rowidx]
             currrows = currrows[rowidx]
             sort!(rowidx, currdata, currrows)
-            append!(newrows, currrows .- convert(eltype(newrows), first(I)) .+ convert(eltype(newrows), 1))
+            append!(newrows, currrows .- convert(eltype(newrows), first(I)) .+ true)
             append!(newdata, currdata)
         end
     end
@@ -124,7 +124,7 @@ Base.getindex(dset::SparseDataset, ::Colon, J::AbstractUnitRange) = dset[1:size(
 function _getindex(dset, i::Integer, J::AbstractUnitRange)
     colptr = getcolptr(dset)
     c1, c2 = colptr[first(J)] + 1, colptr[last(J) + 1]
-    rows = rowvals(dset)[c1:c2] .+ 1
+    rows = rowvals(dset)[c1:c2] .+ true
     rowidx = findall(x -> x == i, rows)
 
     if length(rowidx) == 0
@@ -152,12 +152,12 @@ end
 function _getindex(dset, I::AbstractUnitRange, j::Integer)
     colptr = getcolptr(dset)
     c1, c2 = colptr[j] + 1, colptr[j + 1]
-    rows = rowvals(dset)[c1:c2] .+ 1
+    rows = rowvals(dset)[c1:c2] .+ true
     rowidx = findall(x -> x ∈ I, rows)
     data = nonzeros(dset)[c1:c2][rowidx]
 
     sort!(rowidx, data)
-    return SparseVector(length(I), rows[rowidx] .- first(I) .+ 1, data)
+    return SparseVector(length(I), rows[rowidx] .- first(I) .+ true, data)
 end
 
 function _getindex(dset, i::Integer, ::Colon)
@@ -186,7 +186,7 @@ function _getindex(dset, ::Colon, j::Integer)
     colptr = getcolptr(dset)
     rows = read(rowvals(dset))
     c1, c2 = colptr[j] + 1, colptr[j + 1]
-    rowidx = rows[c1:c2] .+ 1
+    rowidx = rows[c1:c2] .+ true
     data = nonzeros(dset)[c1:c2]
 
     sort!(rowidx, data)
@@ -233,13 +233,13 @@ function Base.setindex!(
     dsetidx = Int[]
     for (ic, c) in enumerate(J)
         c1, c2 = cols[c] + 1, cols[c + 1]
-        crows = rows[c1:c2] .+ 1
+        crows = rows[c1:c2] .+ true
         rowidx = findall(x -> x ∈ I, crows)
-        xvals = x[I[I .∉ ((@view crows[rowidx]),)] .- first(I) .+ 1, ic]
+        xvals = x[I[I .∉ ((@view crows[rowidx]),)] .- first(I) .+ true, ic]
         if length(rowidx) != length(I) && any(xvals .!= 0)
             throw(KeyError("changing the sparsity structure of a SparseDataset is not supported"))
         end
-        append!(xidx, linxidx[crows[rowidx] .- first(I) .+ 1, ic])
+        append!(xidx, linxidx[crows[rowidx] .- first(I) .+ true, ic])
         append!(dsetidx, c1 - 1 .+ rowidx)
     end
     # HDF5 doesn't support assignment using Arrays as indices, so we have to loop

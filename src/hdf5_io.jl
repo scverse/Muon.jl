@@ -44,7 +44,7 @@ function read_matrix(f::HDF5.Dataset; kwargs...)
             haskey(attributes(categories), "ordered") &&
             read_attribute(categories, "ordered") == true
         cats = read(categories)
-        mat = mat .+ 0x1
+        mat .+= 1
         mat = compress(
             CategoricalArray{eltype(cats), ndims(mat)}(
                 mat,
@@ -66,8 +66,8 @@ function read_matrix(f::HDF5.Group; kwargs...)
         indices = read(f, "indices")
         data = read(f, "data")
 
-        indptr .+= eltype(indptr)(1)
-        indices .+= eltype(indptr)(1)
+        indptr .+= 1
+        indices .+= 1
 
         # the row indices in every column need to be sorted
         @views for (colstart, colend) in zip(indptr[1:(end - 1)], indptr[2:end])
@@ -82,7 +82,7 @@ function read_matrix(f::HDF5.Group; kwargs...)
     elseif enctype == "categorical"
         ordered = read_attribute(f, "ordered") > 0
         categories = read(f, "categories")
-        codes = read(f, "codes") .+ 1
+        codes = read(f, "codes") .+ true
 
         T = any(codes .== 0) ? Union{Missing, eltype(categories)} : eltype(categories)
         mat = CategoricalVector{T}(
@@ -218,7 +218,7 @@ function write_impl(
     attrs["encoding-version"] = "0.2.0"
     _write_attribute(g, "ordered", isordered(data))
     write_impl(g, "categories", levels(data); kwargs...)
-    write_impl(g, "codes", data.refs .- 1; kwargs...)
+    write_impl(g, "codes", data.refs .- true; kwargs...)
 end
 
 function write_impl(
@@ -388,8 +388,8 @@ function write_impl(
     shape = collect(size(data))
     transposed && reverse!(shape)
     attrs["shape"] = shape
-    write_impl(g, "indptr", data.colptr .- 1, extensible=true)
-    write_impl(g, "indices", data.rowval .- 1, extensible=true)
+    write_impl(g, "indptr", data.colptr .- true, extensible=true)
+    write_impl(g, "indices", data.rowval .- true, extensible=true)
     write_impl(g, "data", data.nzval, extensible=true)
 end
 

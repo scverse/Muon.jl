@@ -2,14 +2,7 @@ using Random
 Random.seed!(42)
 _size = rand(100:200)
 
-function make_testvalues(_size::Integer)
-    testvalues = Vector{String}(undef, _size)
-    for i in 1:_size
-        length = rand(50:200)
-        testvalues[i] = randstring(length)
-    end
-    return testvalues
-end
+make_testvalues(_size::Integer) = [randstring(rand(50:200)) for _ in 1:_size]
 
 testvalues = make_testvalues(_size)
 idx = Muon.Index(testvalues)

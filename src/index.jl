@@ -122,13 +122,13 @@ function _delete!(idx::Index, oldkeyindex::Integer)
         idx.indices[oldkeyindex:(lastidx - 0x2)] .=
             @view idx.indices[(oldkeyindex + 0x1):(lastidx - 0x1)]
         idx.probepositions[oldkeyindex:(lastidx - 0x2)] .=
-            @view(idx.probepositions[(oldkeyindex + 0x1):(lastidx - 0x1)]) .- 0x1
-        idx.indices[lastidx - 0x1] = idx.probepositions[lastidx - 0x1] = 0x0
+            @view(idx.probepositions[(oldkeyindex + 0x1):(lastidx - 0x1)]) .- true
+        idx.indices[lastidx - 0x1] = idx.probepositions[lastidx - 0x1] = false
     else
         if oldkeyindex < _length(idx)
             idx.indices[oldkeyindex:(end - 0x1)] .= @view idx.indices[(oldkeyindex + 0x1):end]
             idx.probepositions[oldkeyindex:(end - 0x1)] .=
-                @view(idx.probepositions[(oldkeyindex + 0x1):end]) .- 0x1
+                @view(idx.probepositions[(oldkeyindex + 0x1):end]) .- true
         end
         if idx.probepositions[1] > 0x1
             idx.indices[end] = idx.indices[1]
@@ -140,7 +140,7 @@ function _delete!(idx::Index, oldkeyindex::Integer)
             end
             idx.indices[0x1:(lastidx - 0x2)] .= @view idx.indices[0x2:(lastidx - 0x1)]
             idx.probepositions[0x1:(lastidx - 0x2)] .=
-                @view(idx.probepositions[0x2:(lastidx - 0x1)]) .- 0x1
+                @view(idx.probepositions[0x2:(lastidx - 0x1)]) .- true
             idx.indices[lastidx - 0x1] = idx.probepositions[lastidx - 0x1] = 0x0
         else
             idx.indices[end] = idx.probepositions[end] = 0x0
