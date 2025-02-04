@@ -65,12 +65,14 @@ ad_sub[[1,3],:]
 Make duplicate `var_names` unique by appending a numbered suffix.
 
 ```@example 1
+import Muon: var_names_make_unique! # hide
 var_names_make_unique!(ad)
 ```
 
 Similarly, we can make `obs_names` unique also.
 
 ```@example 1
+import Muon: obs_names_make_unique! # hide
 obs_names_make_unique!(ad)
 ```
 
