@@ -40,15 +40,24 @@ end
     test_ad_slicing(subad, 50, 5, x[i, 3:7])
 end
 
-@testset "anndata functions" begin
+@testset "unique names" begin
     @test_logs (:info,) var_names_make_unique!(ad)
+    @test_logs (:info,) obs_names_make_unique!(ad)
     ad2 = deepcopy(ad)
     ad2.var_names[3] == "10"
+    ad2.obs_names[90] == "obs_30"
     var_names_make_unique!(ad2)
+    obs_names_make_unique!(ad2)
     @test allunique(ad2.var_names)
+    @test allunique(ad2.obs_names)
     ad2.var_names[10] = "10-1"
     ad2.var_names[3] = "10"
     ad2.var_names[4] = "10"
+    ad2.obs_names[11] = "obs_10-1"
+    ad2.obs_names[10] = "obs_10"
+    ad2.obs_names[9] = "obs_10"
     @test_logs (:warn,) var_names_make_unique!(ad2)
+    @test_logs (:warn,) obs_names_make_unique!(ad2)
     @test allunique(ad2.var_names)
+    @test allunique(ad2.obs_names)
 end

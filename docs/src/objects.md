@@ -68,6 +68,12 @@ Make duplicate `var_names` unique by appending a numbered suffix.
 var_names_make_unique!(ad)
 ```
 
+Similarly, we can make `obs_names` unique also.
+
+```@example 1
+obs_names_make_unique!(ad)
+```
+
 ## MuData
 
 The basic idea behind a multimodal object is _key_ ``\rightarrow`` _value_ relationship where _keys_ represent the unique names of individual modalities and _values_ are `AnnData` objects that contain the correposnding data. Similarly to `AnnData` objects, `MuData` objects can also contain rich multimodal annotations.
