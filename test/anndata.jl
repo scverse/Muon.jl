@@ -39,3 +39,16 @@ end
     @test copy(adview).X == subad.X
     test_ad_slicing(subad, 50, 5, x[i, 3:7])
 end
+
+@testset "anndata functions" begin
+    @test_logs (:info,) var_names_make_unique!(ad)
+    ad2 = deepcopy(ad)
+    ad2.var_names[3] == "10"
+    var_names_make_unique!(ad2)
+    @test allunique(ad2.var_names)
+    ad2.var_names[10] = "10-1"
+    ad2.var_names[3] = "10"
+    ad2.var_names[4] = "10"
+    @test_logs (:warn,) var_names_make_unique!(ad2)
+    @test allunique(ad2.var_names)
+end
