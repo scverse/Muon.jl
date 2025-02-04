@@ -60,6 +60,14 @@ ad_sub[[true,false,true],:]
 ad_sub[[1,3],:]
 ```
 
+### Operations on AnnData Objects
+
+Make duplicate `var_names` unique by appending a numbered suffix.
+
+```@example 1
+var_names_make_unique!(ad)
+```
+
 ## MuData
 
 The basic idea behind a multimodal object is _key_ ``\rightarrow`` _value_ relationship where _keys_ represent the unique names of individual modalities and _values_ are `AnnData` objects that contain the correposnding data. Similarly to `AnnData` objects, `MuData` objects can also contain rich multimodal annotations.
