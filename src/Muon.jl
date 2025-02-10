@@ -15,6 +15,7 @@ using FileIO
 
 export readh5mu, readh5ad, writeh5mu, writeh5ad, isbacked, update_obs!, update_var!, update!
 export AnnData, MuData
+export var_names_make_unique!, obs_names_make_unique!
 
 import Pkg
 # this executes only during precompilation

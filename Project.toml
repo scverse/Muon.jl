@@ -23,6 +23,7 @@ CompressHashDisplace = "0.1.2"
 DataFrames = "0.22, 1"
 FileIO = "1.6"
 HDF5 = "0.16 - 0.99, 1"
+Logging = "1.6.7"
 OrderedCollections = "1.6"
 PooledArrays = "1"
 StructArrays = "0.6.4"
@@ -30,6 +31,7 @@ julia = "1.5"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 
 [targets]
-test = ["Test"]
+test = ["Test", "Logging"]

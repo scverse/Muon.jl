@@ -1,4 +1,4 @@
-using Muon, Test
+using Muon, Test, Logging
 
 @testset "Index" begin
     include("index.jl")
