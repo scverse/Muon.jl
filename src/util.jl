@@ -175,7 +175,7 @@ function index_make_unique!(index, join)
     end
 end
 
-function duplicateindicies(v::Muon.Index{T, I}) where {T <: AbstractString, I <: Integer}
+function duplicateindices(v::Muon.Index{T, I}) where {T <: AbstractString, I <: Integer}
     varnames = Dict{T, Vector{Int64}}()
 
     for i in eachindex(v)
