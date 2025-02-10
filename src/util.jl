@@ -136,7 +136,7 @@ function obs_names_make_unique!(A::AnnData, join='-')
 end
 
 function index_make_unique!(index, join)
-    duplicates = duplicateindicies(index)
+    duplicates = duplicateindices(index)
 
     if isempty(duplicates)
         @info "var names are already unique, doing nothing"
