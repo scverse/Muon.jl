@@ -189,3 +189,35 @@ function duplicateindices(v::Muon.Index{T, I}) where {T <: AbstractString, I <: 
     filter!(x -> length(last(x)) > 1, varnames)
     varnames
 end
+
+"""
+    DataFrame(A::AnnData; layer=nothing, columns=:var)
+
+Return a DataFrame containing the data matrix `A.X` (or `layer` by
+passing `layer="layername"`). By default, the first column contains
+`A.obs_names` and the remaining columns are named according to
+`A.var_names`, to obtain the transpose, pass `columns=:obs`.
+"""
+function DataFrames.DataFrame(A::AnnData; layer::Union{String, Nothing}=nothing, columns=:var)
+    if columns ∉ [:obs, :var]
+        throw(ArgumentError("columns must be :obs or :var (got: $columns)"))
+    end
+    rows = columns == :var ? :obs : :var
+    colnames = getproperty(A, Symbol(columns, :_names))
+    if !allunique(colnames)
+        throw(ArgumentError("duplicate column names ($(columns)_names); run $(columns)_names_make_unique!"))
+    end
+    rownames = getproperty(A, Symbol(rows, :_names))
+
+    M = if isnothing(layer)
+        A.X
+    elseif layer in keys(A.layers)
+        A.layers[layer]
+    else
+        throw(ArgumentError("no layer $layer in adata layers"))
+    end
+    df = DataFrame(columns == :var ? M : transpose(M), colnames)
+    setproperty!(df, rows, rownames)
+    select!(df, rows, All())
+    df
+end

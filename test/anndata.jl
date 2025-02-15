@@ -61,3 +61,17 @@ end
     @test allunique(ad2.var_names)
     @test allunique(ad2.obs_names)
 end
+
+@testset "DataFrame conversion" begin
+    using DataFrames
+    df = DataFrame(ad)
+    @test names(df) == ["obs"; ad.var_names]
+    @test df.obs == ad.obs_names
+    ad.var_names[3] = "10"
+    @test_throws ArgumentError DataFrame(ad)
+    @test_throws ArgumentError DataFrame(ad, columns=:foo)
+    @test_throws ArgumentError DataFrame(ad, layer="doesn't exist")
+    df2 = DataFrame(ad, columns=:obs)
+    @test names(df2) == ["var"; ad.obs_names]
+    @test df2.var == ad.var_names
+end

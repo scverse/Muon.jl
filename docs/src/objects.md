@@ -76,6 +76,21 @@ import Muon: obs_names_make_unique! # hide
 obs_names_make_unique!(ad)
 ```
 
+The data matrices of `AnnData` objects can be converted to a `DataFrame`, annotated with `obs` and `var` names.
+
+```@example 1
+using DataFrames
+DataFrame(ad)
+```
+
+By default, the first column `obs` corresponds to the `obs_names` and the remaining columns are named according to the `var_names`. To obtain the transpose of this, pass `columns=:obs`.
+
+To use a different data matrix (the default is `ad.X`), pass the name of the layer:
+
+```julia
+DataFrame(ad, layer="raw")
+```
+
 ## MuData
 
 The basic idea behind a multimodal object is _key_ ``\rightarrow`` _value_ relationship where _keys_ represent the unique names of individual modalities and _values_ are `AnnData` objects that contain the correposnding data. Similarly to `AnnData` objects, `MuData` objects can also contain rich multimodal annotations.
