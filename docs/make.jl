@@ -1,4 +1,4 @@
-using Documenter, Muon
+using Documenter, Muon, DataFrames
 
 makedocs(sitename="Muon Documentation", warnonly=:cross_references)
 
