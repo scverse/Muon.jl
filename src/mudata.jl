@@ -465,7 +465,7 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
         globaljoincols = Vector{String}()
         for mod in intersect(keys(getproperty(mdata, mapattr)), keys(mdata.mod))
             colname = mod * ":" * rowcol
-            globaldata[!, colname] = getproperty(mdata, mapattr)[mod]
+            globaldata[!, colname] = reshape(getproperty(mdata, mapattr)[mod], :)
             push!(globaljoincols, colname)
         end
         for col in globaljoincols

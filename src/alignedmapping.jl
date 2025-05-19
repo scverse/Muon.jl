@@ -92,6 +92,9 @@ Base.pop!(d::AlignedMapping, k) = pop!(d.d, k)
 Base.pop!(d::AlignedMapping, k, default) = pop!(d.d, k, default)
 function Base.setindex!(d::AlignedMapping{T}, v::Union{AbstractArray, DataFrame}, k) where {T}
     checkdim(T, v, d.ref, k)
+    if ndims(v) == 1
+        v = reshape(v, :, 1)
+    end
     d.d[k] = v
 end
 Base.sizehint!(d::AlignedMapping, n) = sizehint!(d.d, n)
