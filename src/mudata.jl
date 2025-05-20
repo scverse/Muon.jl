@@ -265,8 +265,8 @@ function Base.getindex(
     newmu = MuData(
         mod=Dict{String, AnnData}(
             k => ad[
-                getadidx(I, mdata.obsmap[k], mdata.obs_names),
-                getadidx(J, mdata.varmap[k], mdata.var_names),
+                getadidx(I, reshape(mdata.obsmap[k], :), mdata.obs_names),
+                getadidx(J, reshape(mdata.varmap[k], :), mdata.var_names),
             ] for (k, ad) in mdata.mod
         ),
         obs=isempty(mdata.obs) ? nothing : mdata.obs[i, :],
@@ -284,7 +284,7 @@ function Base.getindex(
 
     for mapping in (newmu.obsmap, newmu.varmap)
         for mod in keys(mdata.mod)
-            cmap = mapping[mod]
+            cmap = reshape(mapping[mod], :)
             nz = findall(cmap .> 0x0)
             cmap[nz] .= 1:length(nz)
         end
@@ -588,8 +588,8 @@ function Base.view(mu::MuData, I, J)
     mod = Dict(
         m => view(
             ad,
-            getadidx(I, mu.obsmap[m], mu.obs_names, true),
-            getadidx(J, mu.varmap[m], mu.var_names, true),
+            getadidx(I, reshape(mu.obsmap[m], :), mu.obs_names, true),
+            getadidx(J, reshape(mu.varmap[m], :), mu.var_names, true),
         ) for (m, ad) in mu.mod
     )
     return MuDataView(
