@@ -280,19 +280,6 @@ write_impl(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, data::Sub
 function write_impl(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
-    data::Union{BitArray, AbstractArray{Bool}},
-    ;
-    extensible::Bool=false,
-    compress::UInt8=0x9,
-    kwargs...,
-)
-    dtype = _datatype(Bool)
-    write_impl_array(parent, name, Array{UInt8}(data), dtype, size(data), compress)
-end
-
-function write_impl(
-    parent::Union{HDF5.File, HDF5.Group},
-    name::AbstractString,
     data::AbstractArray{Union{Bool, Missing}};
     kwargs...,
 )
@@ -344,6 +331,18 @@ function write_impl(
     end
     dtype = datatype(data)
     write_impl_array(parentgrp, name, data, dtype, dims, compress)
+end
+
+function write_impl_array(
+    parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    data::Union{BitArray, AbstractArray{Bool}},
+    dtype::HDF5.Datatype,
+    dims::Union{Tuple{Vararg{<:Integer}}, Tuple{Tuple{Vararg{<:Integer, N}}, Tuple{Vararg{<:Integer, N}}}},
+    compress::UInt8,
+) where N
+    dtype = _datatype(Bool)
+    write_impl_array(parent, name, Array{UInt8}(data), dtype, dims, compress)
 end
 
 function write_impl_array(
