@@ -36,7 +36,7 @@ jobs:
           version: ${{ matrix.julia-version }}
 
       # Cache binary artifacts
-      - uses: actions/cache@v2
+      - uses: actions/cache@v4
         env:
           cache-name: cache-artifacts
         with:
