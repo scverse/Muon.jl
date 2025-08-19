@@ -233,7 +233,7 @@ function write_impl(
     attrs["encoding-type"] = "categorical"
     attrs["encoding-version"] = "0.2.0"
     _write_attribute(g, "ordered", isa(data, CategoricalArray) && isordered(data))
-    write_impl(g, "categories", levels(data); kwargs...)
+    write_impl(g, "categories", unwrap.(levels(data)); kwargs...)
     write_impl(g, "codes", data.refs .- true; kwargs...)
 end
 
