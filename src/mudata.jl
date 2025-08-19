@@ -72,10 +72,10 @@ mutable struct MuData <: AbstractMuData
         # Modalities
         mdata.mod = OrderedDict{String, AnnData}()
         mods = HDF5.keys(file["mod"])
-        
+
         modattr = attributes(file["mod"])
-        mod_order = HDF5.read_attribute(file["mod"], "mod-order")
         if haskey(modattr, "mod-order")
+            mod_order = HDF5.read_attribute(file["mod"], "mod-order")
             if issubset(mods, mod_order)
                 for modality in mod_order
                     mdata.mod[modality] = AnnData(file["mod"][modality], backed, checkversion)
