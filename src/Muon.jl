@@ -11,7 +11,7 @@ using CategoricalArrays
 using StructArrays
 using PooledArrays
 import CompressHashDisplace: FrozenDict
-import OrderedCollections: OrderedDict
+import DataStructures: OrderedDict
 using FileIO
 
 export readh5mu,
