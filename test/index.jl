@@ -2,18 +2,18 @@ using Random
 Random.seed!(42)
 _size = rand(100:200)
 
-make_testvalues(_size::Integer) = [randstring(rand(50:200)) for _ in 1:_size]
+make_testvalues(_size::Integer) = [randstring(rand(50:200)) for _ ∈ 1:_size]
 
 testvalues = make_testvalues(_size)
 idx = Muon.Index(testvalues)
 @testset "integer indexing" begin
-    @testset "element: $i" for (i, v) in enumerate(testvalues)
+    @testset "element: $i" for (i, v) ∈ enumerate(testvalues)
         @test idx[i] == v
     end
 end
 
 @testset "value indexing" begin
-    @testset "element: $i" for (i, v) in enumerate(testvalues)
+    @testset "element: $i" for (i, v) ∈ enumerate(testvalues)
         @test idx[v] == i
     end
 end
@@ -21,7 +21,7 @@ end
 testvalues2 = make_testvalues(_size)
 testvalues3 = copy(testvalues)
 @testset "value replacement" begin
-    @testset "element: $i" for (i, v) in enumerate(testvalues)
+    @testset "element: $i" for (i, v) ∈ enumerate(testvalues)
         testvalues3[i] = testvalues2[i]
         idx[v] = testvalues2[i]
         @test idx == testvalues3
@@ -29,7 +29,7 @@ testvalues3 = copy(testvalues)
 end
 
 @testset "index replacement" begin
-    @testset "element $i" for (i, v) in enumerate(testvalues2)
+    @testset "element $i" for (i, v) ∈ enumerate(testvalues2)
         testvalues3[i] = testvalues[i]
         idx[i] = testvalues[i]
         @test idx == testvalues3
@@ -37,7 +37,7 @@ end
 end
 
 @testset "presence of items" begin
-    @testset "element $i" for (i, v) in enumerate(idx)
+    @testset "element $i" for (i, v) ∈ enumerate(idx)
         @test v ∈ idx
     end
     @test "test" ∉ idx
@@ -64,7 +64,10 @@ end
     @test_throws KeyError subidx1["a"]
     @test_throws KeyError subidx2["a"]
     @test_throws KeyError subidx3["a"]
-    @test subidx1["a", false, false] == subidx2["a", false, false] == subidx3["a", false, false] == 0
+    @test subidx1["a", false, false] ==
+          subidx2["a", false, false] ==
+          subidx3["a", false, false] ==
+          0
     @test subidx1["a", true, false] == subidx2["a", true, false] == subidx3["a", true, false] == []
     @test @view(subidx1[3:5]) == @view(subidx2[3:5]) == @view(subidx3[3:5]) == idx[28:30]
     @test @view(idx[:]) == idx

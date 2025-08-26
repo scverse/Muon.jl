@@ -2,14 +2,14 @@ function Base.sort!(idx::AbstractArray, vals::AbstractArray...)
     if !issorted(idx)
         ordering = sortperm(idx)
         permute!(idx, ordering)
-        for v in vals
+        for v ∈ vals
             permute!(v, ordering)
         end
     end
 end
 
-backed_matrix(obj::Union{HDF5.File, HDF5.Group}) = SparseDataset(obj)
-backed_matrix(obj::HDF5.Dataset) = TransposedDataset(obj)
+backed_matrix(obj::Union{Group}) = SparseDataset(obj)
+backed_matrix(obj::Dataset) = TransposedDataset(obj)
 
 function hdf5_object_name(obj::Union{HDF5.File, HDF5.Group, HDF5.Dataset})
     name = HDF5.name(obj)
@@ -21,16 +21,16 @@ function find_unique_colnames(mdata::MuData, property::Symbol, ncols::Int)
     allunique = false
     local colnames::Vector{String}
     while !allunique
-        colnames = [randstring(nchars) for _ in 1:ncols]
+        colnames = [randstring(nchars) for _ ∈ 1:ncols]
         allunique = length(Set(colnames)) == ncols
         nchars *= 2
     end
 
     it = Iterators.flatten(((mdata,), values(mdata.mod)))
-    for i in 1:ncols
+    for i ∈ 1:ncols
         finished = false
         while !finished
-            for ad in it
+            for ad ∈ it
                 try
                     names(getproperty(ad, property), colnames[i])
                     colnames[i] = "_" * colnames[i]
@@ -47,10 +47,10 @@ function find_unique_colnames(mdata::MuData, property::Symbol, ncols::Int)
     return colnames
 end
 
-function index_duplicates(idx::AbstractArray{T}) where T
+function index_duplicates(idx::AbstractArray{T}) where {T}
     counter = Dict{T, UInt8}()
     dup_idx = Vector{UInt8}(undef, length(idx))
-    for (i, val) in enumerate(idx)
+    for (i, val) ∈ enumerate(idx)
         if val in keys(counter)
             count = counter[val] + 1
         else
@@ -63,7 +63,7 @@ end
 
 function minimum_unsigned_type_for_n(n::Number)
     local mintype::Type
-    for type in [UInt8, UInt16, UInt32, UInt64, UInt128]
+    for type ∈ [UInt8, UInt16, UInt32, UInt64, UInt128]
         mval = typemax(type)
         if mval >= n
             mintype = type
@@ -74,12 +74,12 @@ function minimum_unsigned_type_for_n(n::Number)
 end
 
 @inline function convertidx(
-    idx::Union{AbstractUnitRange, Colon, AbstractVector{<:Integer}, AbstractVector{Bool}},
+    idx::Union{OrdinalRange, Colon, AbstractVector{<:Integer}},
     ref::AbstractIndex{<:AbstractString},
 )
     return idx
 end
-@inline function convertidx(idx::Number, ref::AbstractIndex{<:AbstractString})
+@inline function convertidx(idx::Integer, ref::AbstractIndex{<:AbstractString})
     return idx:idx
 end
 @inline convertidx(
@@ -94,7 +94,7 @@ isbacked(ad::Union{AbstractMuData, AbstractAnnData}) = !isnothing(file(ad))
     Base.checkbounds_indices(
         Bool,
         axes(A),
-        Tuple(i isa AbstractString || i isa AbstractVector{<:AbstractString} ? (:) : i for i in I),
+        Tuple(i isa AbstractString || i isa AbstractVector{<:AbstractString} ? (:) : i for i ∈ I),
     )
 end
 
@@ -146,9 +146,9 @@ function index_make_unique!(index, join)
     example_colliding_names = []
     set = Set(index)
 
-    for (name, positions) in duplicates
+    for (name, positions) ∈ duplicates
         i = 1
-        for pos in Iterators.rest(positions, 2)
+        for pos ∈ Iterators.rest(positions, 2)
             while true
                 potential = string(index[pos], join, i)
                 i += 1
@@ -178,7 +178,7 @@ end
 function duplicateindices(v::Muon.Index{T, I}) where {T <: AbstractString, I <: Integer}
     varnames = Dict{T, Vector{Int64}}()
 
-    for i in eachindex(v)
+    for i ∈ eachindex(v)
         if haskey(varnames, v[i])
             push!(varnames[v[i]], i)
         else
@@ -205,7 +205,11 @@ function DataFrames.DataFrame(A::AnnData; layer::Union{String, Nothing}=nothing,
     rows = columns == :var ? :obs : :var
     colnames = getproperty(A, Symbol(columns, :_names))
     if !allunique(colnames)
-        throw(ArgumentError("duplicate column names ($(columns)_names); run $(columns)_names_make_unique!"))
+        throw(
+            ArgumentError(
+                "duplicate column names ($(columns)_names); run $(columns)_names_make_unique!",
+            ),
+        )
     end
     rownames = getproperty(A, Symbol(rows, :_names))
 

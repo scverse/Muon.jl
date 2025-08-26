@@ -1,8 +1,8 @@
 abstract type AbstractMuData end
 
 mutable struct MuData <: AbstractMuData
-    file::Union{HDF5.File, Nothing}
-    mod::Dict{String, AnnData}
+    file::Union{HDF5.File, ZGroup, Nothing}
+    mod::OrderedDict{String, AnnData}
 
     obs::DataFrame
     obs_names::Index{<:AbstractString}
@@ -18,13 +18,13 @@ mutable struct MuData <: AbstractMuData
 
     uns::Dict{<:AbstractString, <:Any}
 
-    function MuData(file::Union{HDF5.File, HDF5.Group}, backed=false, checkversion=true)
+    function MuData(file::Union{HDF5.File, HDF5.Group, ZGroup}, backed=false, checkversion=true)
         if checkversion
             attrs = attributes(file)
             if !haskey(attrs, "encoding-type")
-                @warn "The HDF5 file was not created by muon, we can't guarantee that everything will work correctly"
+                @warn "This file was not created by muon, we can't guarantee that everything will work correctly"
             elseif attrs["encoding-type"] != "MuData"
-                error("This HDF5 file does not appear to hold a MuData object")
+                error("This file does not appear to hold a MuData object")
             end
         end
 
@@ -75,9 +75,9 @@ mutable struct MuData <: AbstractMuData
 
         modattr = attributes(file["mod"])
         if haskey(modattr, "mod-order")
-            mod_order = HDF5.read_attribute(file["mod"], "mod-order")
+            mod_order = read_attribute(file["mod"], "mod-order")
             if issubset(mods, mod_order)
-                for modality in mod_order
+                for modality ∈ mod_order
                     mdata.mod[modality] = AnnData(file["mod"][modality], backed, checkversion)
                 end
                 return update!(mdata)
@@ -87,7 +87,7 @@ mutable struct MuData <: AbstractMuData
         end
 
         # no mod-order or not all modalities are in mod-order (then mod-order is ignored) 
-        for modality in mods
+        for modality ∈ mods
             mdata.mod[modality] = AnnData(file["mod"][modality], backed, checkversion)
         end
         return update!(mdata)
@@ -114,7 +114,7 @@ mutable struct MuData <: AbstractMuData
         uns::Union{AbstractDict{<:AbstractString, <:Any}, Nothing}=nothing,
         do_update=true,
     )
-        mdata = new(nothing, Dict{String, AnnData}())
+        mdata = new(nothing, OrderedDict{String, AnnData}())
         if !isnothing(mod)
             merge!(mdata.mod, mod)
         end
@@ -168,9 +168,29 @@ function readh5mu(filename::AbstractString; backed=false)
     return mdata
 end
 
+function readzarrmu(filename::AbstractString; backed=false)
+    filename = abspath(filename) # this gets stored in the Zarr objects for backed datasets
+    if !backed
+        fid = zopen(filename, "r")
+    else
+        fid = zopen(filename, "r+")
+    end
+    local mdata
+    try
+        mdata = MuData(fid, backed, true)
+    catch e
+        close(fid)
+        rethrow()
+    end
+    if !backed
+        close(fid)
+    end
+    return mdata
+end
+
 function writeh5mu(filename::AbstractString, mudata::AbstractMuData; compress::UInt8=0x9)
     filename = abspath(filename)
-    if file(mudata) === nothing || filename != HDF5.filename(file(mudata))
+    if isnothing(file(mudata)) || filename != HDF5.filename(file(mudata))
         hfile = h5open(filename, "w", userblock=512)
         try
             write(hfile, mudata, compress=compress)
@@ -189,22 +209,32 @@ function writeh5mu(filename::AbstractString, mudata::AbstractMuData; compress::U
     return nothing
 end
 
-function Base.write(parent::Union{HDF5.File, HDF5.Group}, mudata::AbstractMuData; compress::UInt8=0x9)
-    attrs = attributes(parent)
-    attrs["encoding-type"] = "MuData"
-    attrs["encoding-version"] = string(MUDATAVERSION)
-    attrs["encoder"] = NAME
-    attrs["encoder-version"] = string(VERSION)
+function writezarrmu(filename::AbstractString, mudata::AbstractMuData; compress::UInt8=0x9)
+    filename = abspath(filename)
+    if isnothing(file(mudata)) || filename != zarr_filename(file(mudata))
+        rm(filename, force=true, recursive=true)
+        zfile = zgroup(filename)
+        write(zfile, mudata, compress=compress)
+    else
+        write(mudata, compress=compress)
+    end
+    return nothing
+end
+
+function Base.write(parent::Group, mudata::AbstractMuData; compress::UInt8=0x9)
+    write_attribute(parent, "encoding-type", "MuData")
+    write_attribute(parent, "encoding-version", string(MUDATAVERSION))
+    write_attribute(parent, "encoder", NAME)
+    write_attribute(parent, "encoder-version", string(VERSION))
     if parent === file(mudata)
         write(mudata, compress=compress)
     else
         g = create_group(parent, "mod")
-        for (mod, adata) in mudata.mod
+        for (mod, adata) ∈ mudata.mod
             write(g, mod, adata, compress=compress)
         end
         write_metadata(parent, mudata, compress=compress)
-	g_attrs = attributes(g)
-	g_attrs["mod-order"] = collect(keys(mudata.mod))
+        write_attribute(g, "mod-order", collect(keys(mudata.mod)))
     end
 end
 
@@ -212,13 +242,13 @@ function Base.write(mudata::AbstractMuData; compress::UInt8=0x9)
     if isnothing(file(mudata))
         error("mudata is not backed, need somewhere to write to")
     end
-    for adata in values(mudata.mod)
+    for adata ∈ values(mudata.mod)
         write(adata, compress=compress)
     end
     write_metadata(mudata.file, mudata, compress=compress)
 end
 
-function write_metadata(parent::Union{HDF5.File, HDF5.Group}, mudata::AbstractMuData; compress::UInt8=0x9)
+function write_metadata(parent::Group, mudata::AbstractMuData; compress::UInt8=0x9)
     write_attr(parent, "obs", shrink_attr(mudata, :obs), index=mudata.obs_names, compress=compress)
     write_attr(parent, "obsm", mudata.obsm, index=mudata.obs_names, compress=compress)
     write_attr(parent, "obsp", mudata.obsp, compress=compress)
@@ -232,7 +262,8 @@ end
 
 # FileIO support
 load(f::File{format"h5mu"}; backed::Bool=false) = readh5mu(filename(f), backed=backed)
-save(f::File{format"h5mu"}, data::AbstractMuData; compress::UInt8=0x9) = writeh5mu(filename(f), data, compress=compress)
+save(f::File{format"h5mu"}, data::AbstractMuData; compress::UInt8=0x9) =
+    writeh5mu(filename(f), data, compress=compress)
 
 Base.size(mdata::AbstractMuData) = (length(mdata.obs_names), length(mdata.var_names))
 Base.size(mdata::AbstractMuData, d::Integer) = size(mdata)[d]
@@ -244,7 +275,7 @@ Base.setindex!(mdata::MuData, ad::AnnData, key::Symbol) = setindex!(mdata.mod, a
 function Base.getindex(
     mdata::MuData,
     I::Union{
-        AbstractRange,
+        OrdinalRange,
         Colon,
         AbstractVector{<:Integer},
         AbstractVector{<:AbstractString},
@@ -252,7 +283,7 @@ function Base.getindex(
         AbstractString,
     },
     J::Union{
-        AbstractRange,
+        OrdinalRange,
         Colon,
         AbstractVector{<:Integer},
         AbstractVector{<:AbstractString},
@@ -263,11 +294,11 @@ function Base.getindex(
     @boundscheck checkbounds(mdata, I, J)
     i, j = convertidx(I, mdata.obs_names), convertidx(J, mdata.var_names)
     newmu = MuData(
-        mod=Dict{String, AnnData}(
+        mod=OrderedDict{String, AnnData}(
             k => ad[
-                getadidx(I, reshape(mdata.obsmap[k], :), mdata.obs_names),
-                getadidx(J, reshape(mdata.varmap[k], :), mdata.var_names),
-            ] for (k, ad) in mdata.mod
+                getadidx(i, reshape(mdata.obsmap[k], :), mdata.obs_names),
+                getadidx(j, reshape(mdata.varmap[k], :), mdata.var_names),
+            ] for (k, ad) ∈ mdata.mod
         ),
         obs=isempty(mdata.obs) ? nothing : mdata.obs[i, :],
         obs_names=mdata.obs_names[i],
@@ -282,12 +313,9 @@ function Base.getindex(
     copy_subset(mdata.obsmap, newmu.obsmap, i, j)
     copy_subset(mdata.varmap, newmu.varmap, i, j)
 
-    for mapping in (newmu.obsmap, newmu.varmap)
-        for mod in keys(mdata.mod)
-            cmap = reshape(mapping[mod], :)
-            nz = findall(cmap .> 0x0)
-            cmap[nz] .= 1:length(nz)
-        end
+    for mod ∈ keys(mdata.mod)
+        adjustmap!(reshape(newmu.obsmap[mod], :), i)
+        adjustmap!(reshape(newmu.varmap[mod], :), j)
     end
     return newmu
 end
@@ -299,7 +327,7 @@ getadidx(
     reduce_memory=false,
 ) = I
 function getadidx(
-    I::Union{AbstractVector{<:Integer}, AbstractRange},
+    I::Union{AbstractVector{<:Integer}, OrdinalRange},
     ref::AbstractVector{<:Unsigned},
     idx::AbstractIndex{<:AbstractString},
     reduce_memory=false,
@@ -318,22 +346,26 @@ function getadidx(
     return J
 end
 getadidx(
-    I::Union{AbstractString, AbstractVector{<:AbstractString}},
-    ref::AbstractVector{<:Unsigned},
-    idx::AbstractIndex{<:AbstractString},
-    reduce_memory=false,
-) = getadidx(idx[I, true], ref, idx, reduce_memory)
-getadidx(
     I::Number,
     ref::AbstractVector{<:Unsigned},
     idx::Index{<:AbstractString},
     reduce_memory=false,
 ) = getadidx([I], ref, idx, reduce_memory)
 
+adjustmap!(map::AbstractVector{<:Unsigned}, I::Colon) = map
+function adjustmap!(
+    map::AbstractVector{<:Unsigned},
+    I::Union{Integer, AbstractVector{<:Integer}, OrdinalRange},
+)
+    nz = findall(map .> 0x0)
+    map[nz] .= 1:length(nz)
+    return map
+end
+
 function Base.show(io::IO, mdata::AbstractMuData)
     compact = get(io, :compact, false)
     repr = """$(typeof(mdata).name.name) object $(size(mdata)[1]) \u2715 $(size(mdata)[2])"""
-    for (name, adata) in mdata.mod
+    for (name, adata) ∈ mdata.mod
         repr *= """\n\u2514 $(name)"""
         repr *= """\n  $(typeof(adata).name.name) object $(size(adata)[1]) \u2715 $(size(adata)[2])"""
     end
@@ -347,7 +379,7 @@ end
 function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::Bool=false)
     globalcols = [
         col for
-        col in names(getproperty(mdata, attr)) if !any(startswith.(col, keys(mdata.mod) .* ":"))
+        col ∈ names(getproperty(mdata, attr)) if !any(startswith.(col, keys(mdata.mod) .* ":"))
     ]
     globaldata = getproperty(mdata, attr)[!, globalcols]
     namesattr = Symbol(string(attr) * "_names")
@@ -368,9 +400,9 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
         join_common = false
     end
 
-    dupidx = Dict(mod => index_duplicates(getproperty(ad, namesattr)) for (mod, ad) in mdata.mod)
+    dupidx = Dict(mod => index_duplicates(getproperty(ad, namesattr)) for (mod, ad) ∈ mdata.mod)
     old_dupidx = index_duplicates(old_rownames)
-    for (mod, dups) in dupidx, (mod2, ad) in mdata.mod
+    for (mod, dups) ∈ dupidx, (mod2, ad) ∈ mdata.mod
         if mod != mod2 && any(
             unique(getproperty(mdata.mod[mod], namesattr)[dups .> 0]) .∈
             (getproperty(ad, namesattr),),
@@ -383,8 +415,7 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
     if !isempty(mdata.mod)
         if length(mdata.mod) > 1
             if join_common
-                commoncols =
-                    intersect((names(getproperty(ad, attr)) for ad in values(mdata.mod))...)
+                commoncols = intersect((names(getproperty(ad, attr)) for ad ∈ values(mdata.mod))...)
                 globaldata = select(globaldata, Not(intersect(commoncols, names(globaldata))))
                 dfs = (
                     insertcols!(
@@ -395,7 +426,7 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
                         idxcol => getproperty(ad, namesattr),
                         dupidxcol => dupidx[mod],
                         mod * ":" * rowcol => 1:length(getproperty(ad, namesattr)),
-                    ) for (mod, ad) in mdata.mod
+                    ) for (mod, ad) ∈ mdata.mod
                 )
                 data_mod =
                     axis == 0 ? vcat(dfs..., cols=:union) :
@@ -407,7 +438,7 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
                             select(getproperty(ad, attr), commoncols..., copycols=false),
                             idxcol => getproperty(ad, namesattr),
                             dupidxcol => dupidx[mod],
-                        ) for (mod, ad) in mdata.mod
+                        ) for (mod, ad) ∈ mdata.mod
                     )...,
                 )
                 data_mod = leftjoin(data_mod, data_common, on=[idxcol, dupidxcol])
@@ -421,7 +452,7 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
                         idxcol => getproperty(ad, namesattr),
                         dupidxcol => dupidx[mod],
                         mod * ":" * rowcol => 1:length(getproperty(ad, namesattr)),
-                    ) for (mod, ad) in mdata.mod
+                    ) for (mod, ad) ∈ mdata.mod
                 )
                 data_mod =
                     axis == 0 ? vcat(dfs..., cols=:union) :
@@ -430,7 +461,7 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
 
             # reorder based on individual dataframes
             if axis == 1
-                newidx = DataFrame(union([zip(df[:, idxcol], df[:, dupidxcol]) for df in dfs]...))
+                newidx = DataFrame(union([zip(df[:, idxcol], df[:, dupidxcol]) for df ∈ dfs]...))
                 rename!(newidx, [idxcol, dupidxcol])
                 if size(globaldata, 1) > 0
                     mask = newidx[!, idxcol] .∈ (old_rownames,)
@@ -459,16 +490,16 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
         # this occurs when join_common=true and we already have a global data frame, e.g. after reading from HDF5
         if join_common
             sharedcols = intersect(names(data_mod), names(globaldata))
-            rename!(globaldata, [col => "global:$col" for col in sharedcols])
+            rename!(globaldata, [col => "global:$col" for col ∈ sharedcols])
         end
 
         globaljoincols = Vector{String}()
-        for mod in intersect(keys(getproperty(mdata, mapattr)), keys(mdata.mod))
+        for mod ∈ intersect(keys(getproperty(mdata, mapattr)), keys(mdata.mod))
             colname = mod * ":" * rowcol
             globaldata[!, colname] = reshape(getproperty(mdata, mapattr)[mod], :)
             push!(globaljoincols, colname)
         end
-        for col in globaljoincols
+        for col ∈ globaljoincols
             data_mod[!, col] = coalesce.(data_mod[!, col], 0x0)
         end
 
@@ -488,7 +519,7 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
         select!(data_mod, Not([idxcol, dupidxcol]))
 
         if join_common
-            for col in sharedcols
+            for col ∈ sharedcols
                 gcol = "global:$col"
                 if data_mod[col] == data_mod[gcol]
                     select!(data_mod, Not(gcol))
@@ -515,7 +546,7 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
     end
 
     setproperty!(mdata, namesattr, Index(rownames))
-    for (mod, ad) in mdata.mod
+    for (mod, ad) ∈ mdata.mod
         colname = mod * ":" * rowcol
         adindices = data_mod[!, colname]
         select!(data_mod, Not(colname))
@@ -528,14 +559,14 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::Integer, join_common::
 
     keep_index = rownames .∈ (old_rownames,)
     @inbounds if sum(keep_index) != length(old_rownames)
-        for (k, v) in getproperty(mdata, mattr)
+        for (k, v) ∈ getproperty(mdata, mattr)
             if k ∉ keys(mdata.mod)
                 getproperty(mdata, mattr)[k] = v[keep_index, :]
             end
         end
 
         pattr = Symbol(string(attr) * "p")
-        for (k, v) in getproperty(mdata, pattr)
+        for (k, v) ∈ getproperty(mdata, pattr)
             if k ∉ keys(mdata.mod)
                 getproperty(mdata, pattr)[k] = v[keep_index, keep_index]
             end
@@ -556,7 +587,7 @@ end
 function shrink_attr(mdata::AbstractMuData, attr::Symbol)
     globalcols = [
         col for
-        col in names(getproperty(mdata, attr)) if !any(startswith.(col, keys(mdata.mod) .* ":"))
+        col ∈ names(getproperty(mdata, attr)) if !any(startswith.(col, keys(mdata.mod) .* ":"))
     ]
     return disallowmissing!(select(getproperty(mdata, attr), globalcols))
 end
@@ -588,9 +619,9 @@ function Base.view(mu::MuData, I, J)
     mod = Dict(
         m => view(
             ad,
-            getadidx(I, reshape(mu.obsmap[m], :), mu.obs_names, true),
-            getadidx(J, reshape(mu.varmap[m], :), mu.var_names, true),
-        ) for (m, ad) in mu.mod
+            getadidx(i, reshape(mu.obsmap[m], :), mu.obs_names, true),
+            getadidx(j, reshape(mu.varmap[m], :), mu.var_names, true),
+        ) for (m, ad) ∈ mu.mod
     )
     return MuDataView(
         mu,

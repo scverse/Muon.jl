@@ -6,7 +6,7 @@ end
 @testset "Elementwise IO" begin
     include("elementwise_io.jl")
 end
-@testset "HDF5 backed matrix" begin
+@testset "backed matrix" begin
     include("backed_matrix.jl")
 end
 @testset "aligned mappings" begin

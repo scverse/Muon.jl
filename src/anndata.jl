@@ -1,7 +1,7 @@
 abstract type AbstractAnnData end
 
 mutable struct AnnData <: AbstractAnnData
-    file::Union{HDF5.File, HDF5.Group, Nothing}
+    file::Union{HDF5.File, HDF5.Group, ZGroup, Nothing}
 
     X::Union{AbstractMatrix{<:Number}, Nothing}
 
@@ -21,13 +21,13 @@ mutable struct AnnData <: AbstractAnnData
 
     uns::Dict{<:AbstractString, <:Any}
 
-    function AnnData(file::Union{HDF5.File, HDF5.Group}, backed=false, checkversion=true)
+    function AnnData(file::Union{HDF5.File, HDF5.Group, ZGroup}, backed=false, checkversion=true)
         if checkversion
             attrs = attributes(file)
             if !haskey(attrs, "encoding-type")
-                @warn "The HDF5 file was not created by muon, we can't guarantee that everything will work correctly"
-            elseif attrs["encoding-type"] != "AnnData"
-                error("This HDF5 file does not appear to hold an AnnData object")
+                @warn "This file was not created by muon, we can't guarantee that everything will work correctly"
+            elseif attrs["encoding-type"] != "anndata"
+                error("This file does not appear to hold an AnnData object")
             end
         end
 
@@ -158,9 +158,29 @@ function readh5ad(filename::AbstractString; backed=false)
     return adata
 end
 
+function readzarrad(filename::AbstractString; backed=false)
+    filename = abspath(filename)
+    if !backed
+        fid = zopen(filename, "r")
+    else
+        fid = zopen(filename, "r+")
+    end
+    local adata
+    try
+        adata = AnnData(fid, backed, true)
+    catch e
+        close(fid)
+        rethrow()
+    end
+    if !backed
+        close(fid)
+    end
+    return adata
+end
+
 function writeh5ad(filename::AbstractString, adata::AbstractAnnData; compress::UInt8=0x9)
     filename = abspath(filename)
-    if file(adata) === nothing || filename != HDF5.filename(file(adata))
+    if isnothing(file(adata)) || filename != HDF5.filename(file(adata))
         hfile = h5open(filename, "w", userblock=512)
         try
             write(hfile, adata, compress=compress)
@@ -179,22 +199,43 @@ function writeh5ad(filename::AbstractString, adata::AbstractAnnData; compress::U
     return nothing
 end
 
-function Base.write(
-    parent::Union{HDF5.File, HDF5.Group},
-    name::AbstractString,
-    adata::AbstractAnnData;
-    compress::UInt8=0x9
-)
+function writezarrad(filename::AbstractString, adata::AbstractAnnData; compress::UInt8=0x9)
+    filename = abspath(filename)
+    if isnothing(file(adata)) || filename != zarr_filename(file(adata))
+        rm(filename, force=true, recursive=true)
+        zfile = zgroup(filename)
+        write(zfile, adata, compress=compress)
+    else
+        write(adata, compress=compress)
+    end
+    return nothing
+end
+
+# HDF5.jl defines Base.write(::Union{HDF5.File, HDF5.Group}, ::Union{Nothing, AbstractString}, ::Any; kwargs...)
+# Using the below as Base.write leads to ambiguity: The HDF5.jl definition is more specific in the first argument,
+# ours is more specific in the third argument. Thus the ugly workaround.
+function _write(parent::Group, name::AbstractString, adata::AbstractAnnData; compress::UInt8=0x9)
     g = create_group(parent, name)
     write(g, adata, compress=compress)
 end
+Base.write(
+    parent::Union{HDF5.File, HDF5.Group},
+    name::AbstractString,
+    adata::AbstractAnnData;
+    compress::UInt8=0x9,
+)=_write(parent, name, adata, compress=compress)
+Base.write(
+    parent::ZGroup,
+    name::AbstractString,
+    adata::AbstractAnnData;
+    compress::UInt8=0x9,
+)=_write(parent, name, adata, compress=compress)
 
-function Base.write(parent::Union{HDF5.File, HDF5.Group}, adata::AbstractAnnData; compress::UInt8=0x9)
-    attrs = attributes(parent)
-    attrs["encoding-type"] = "anndata"
-    attrs["encoding-version"] = string(ANNDATAVERSION)
-    attrs["encoder"] = NAME
-    attrs["encoder-version"] = string(VERSION)
+function Base.write(parent::Group, adata::AbstractAnnData; compress::UInt8=0x9)
+    write_attribute(parent, "encoding-type", "anndata")
+    write_attribute(parent, "encoding-version", string(ANNDATAVERSION))
+    write_attribute(parent, "encoder", NAME)
+    write_attribute(parent, "encoder-version", string(VERSION))
     if parent === file(adata)
         write(adata, compress=compress)
     else
@@ -211,7 +252,7 @@ function Base.write(adata; compress::UInt8=0x9)
     write_metadata(file(adata), adata, compress=compress)
 end
 
-function write_metadata(parent::Union{HDF5.File, HDF5.Group}, adata::AbstractAnnData; compress::UInt8=0x9)
+function write_metadata(parent::Group, adata::AbstractAnnData; compress::UInt8=0x9)
     write_attr(parent, "obs", adata.obs, index=adata.obs_names, compress=compress)
     write_attr(parent, "obsm", adata.obsm, index=adata.obs_names, compress=compress)
     write_attr(parent, "obsp", adata.obsp, compress=compress)
@@ -222,7 +263,8 @@ function write_metadata(parent::Union{HDF5.File, HDF5.Group}, adata::AbstractAnn
 end
 # FileIO support
 load(f::File{format"h5ad"}; backed::Bool=false) = readh5ad(filename(f), backed=backed)
-save(f::File{format"h5ad"}, data::AbstractAnnData; compress::UInt8=0x9) = writeh5ad(filename(f), data, compress=compress)
+save(f::File{format"h5ad"}, data::AbstractAnnData; compress::UInt8=0x9) =
+    writeh5ad(filename(f), data, compress=compress)
 
 Base.size(adata::AbstractAnnData) = (length(adata.obs_names), length(adata.var_names))
 Base.size(adata::AbstractAnnData, d::Integer) = size(adata)[d]
@@ -247,7 +289,7 @@ end
 function Base.getindex(
     adata::AbstractAnnData,
     I::Union{
-        AbstractUnitRange,
+        OrdinalRange,
         Colon,
         AbstractVector{<:Integer},
         AbstractVector{<:AbstractString},
@@ -255,7 +297,7 @@ function Base.getindex(
         AbstractString,
     },
     J::Union{
-        AbstractUnitRange,
+        OrdinalRange,
         Colon,
         AbstractVector{<:Integer},
         AbstractVector{<:AbstractString},

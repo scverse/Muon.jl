@@ -1,7 +1,7 @@
 n = 100
 d = 10
 x = rand(Float64, (n, d))
-obs_names = ["obs_$i" for i in 1:n]
+obs_names = ["obs_$i" for i ∈ 1:n]
 ad = AnnData(X=x, obs_names=obs_names)
 
 @testset "create anndata" begin
@@ -17,10 +17,10 @@ function test_row_slice(ad, i1, n, d, x)
 end
 
 function test_ad_slicing(ad, n, d, x)
-    @testset "row slice $(1:i)" for i in 2:n
+    @testset "row slice $(1:i)" for i ∈ 2:n
         test_row_slice(ad, 1:i, n, d, x)
     end
-    @testset "row slice $(i:(i + 1))" for i in 1:(n - 1)
+    @testset "row slice $(i:(i + 1))" for i ∈ 1:(n - 1)
         test_row_slice(ad, i:(i + 1), n, d, x)
     end
 end
@@ -30,7 +30,7 @@ end
 end
 
 @testset "views" begin
-    i, j = (26:75, [string(i) for i in 3:7])
+    i, j = (26:75, [string(i) for i ∈ 3:7])
     adview = @view ad[i, j]
     subad = ad[i, j]
     @test adview.X == x[26:75, 3:7]

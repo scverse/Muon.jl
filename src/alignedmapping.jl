@@ -20,41 +20,37 @@ struct AlignedMapping{T <: Tuple, K, R} <: AbstractAlignedMapping{
     }
 
     function AlignedMapping{T, K}(r, d::AbstractDict{K}) where {T <: Tuple, K}
-        for (k, v) in d
+        for (k, v) ∈ d
             checkdim(T, v, r, k)
         end
         return new{T, K, typeof(r)}(r, d)
     end
 end
 
-mutable struct BackedAlignedMapping{T <: Tuple, R} <:
+mutable struct BackedAlignedMapping{T <: Tuple, G <: Group, R} <:
                AbstractAlignedMapping{T, String, AbstractArray{<:Number}}
     ref::R
-    d::Union{HDF5.Group, Nothing}
-    parent::Union{HDF5.File, HDF5.Group, Nothing}
+    d::Union{G, Nothing}
+    parent::Union{G, Nothing}
     path::Union{String, Nothing}
 
-    function BackedAlignedMapping{T}(r, g::HDF5.Group) where {T <: Tuple}
-        for k in keys(g)
+    function BackedAlignedMapping{T}(r, g) where {T <: Tuple}
+        for k ∈ keys(g)
             checkdim(T, backed_matrix(g[k]), r, k)
         end
-        return new{T, typeof(r)}(r, g, nothing, nothing)
+        return new{T, typeof(g), typeof(r)}(r, g, nothing, nothing)
     end
-    function BackedAlignedMapping{T}(
-        r,
-        parent::Union{HDF5.File, HDF5.Group},
-        path::String,
-    ) where {T <: Tuple}
+    function BackedAlignedMapping{T}(r, parent::Group, path::String) where {T <: Tuple}
         if haskey(parent, path)
             return BackedAlignedMapping{T}(r, parent[path])
         else
-            return new{T, typeof(r)}(r, nothing, parent, path)
+            return new{T, typeof(parent), typeof(r)}(r, nothing, parent, path)
         end
     end
 end
 
 function checkdim(::Type{T}, v, ref, k) where {T <: Tuple}
-    for (vdim, refdim) in T.parameters
+    for (vdim, refdim) ∈ T.parameters
         vsize = size(v, vdim)
         rsize = size(ref, refdim)
         if vsize != rsize
@@ -102,13 +98,12 @@ Base.sizehint!(d::AlignedMapping, n) = sizehint!(d.d, n)
 AlignedMapping{T}(r, d::AbstractDict) where {T <: Tuple} = AlignedMapping{T, keytype(d)}(r, d)
 AlignedMapping{T, K}(ref) where {T, K} = AlignedMapping{T}(ref, Dict{K, AbstractMatrix{<:Number}}())
 AlignedMapping{T, K}(ref, ::Nothing) where {T, K} = AlignedMapping{T, K}(ref)
-AlignedMapping{T}(r, d::HDF5.Group) where {T <: Tuple} =
-    AligedMapping{T}(ref, read_dict_of_mixed(d))
+AlignedMapping{T}(r, d::Group) where {T <: Tuple} = AligedMapping{T}(ref, read_dict_of_mixed(d))
 
 Base.delete!(d::BackedAlignedMapping, k) = !isnothing(d.d) && delete_object(d.d, k)
 function Base.empty!(d::BackedAlignedMapping)
     if !isnothing(d.d)
-        for k in keys(d.d)
+        for k ∈ keys(d.d)
             delete_object(d.d, k)
         end
     end
@@ -121,16 +116,10 @@ Base.get(default::Base.Callable, d::BackedAlignedMapping, key) =
     isnothing(d.d) || !haskey(d.d, key) ? default() : backed_matrix(d.d[key])
 Base.haskey(d::BackedAlignedMapping, key) = isnothing(d.d) ? false : haskey(d.d, key)
 Base.isempty(d::BackedAlignedMapping) = isnothing(d.d) ? true : isempty(d.d)
-function Base.iterate(d::BackedAlignedMapping)
-    if isnothing(d.d)
-        return nothing
-    else
-        next = iterate(d.d)
-        return isnothing(next) ? next :
-               (hdf5_object_name(next[1]) => backed_matrix(next[1]), next[2])
-    end
-end
-function Base.iterate(d::BackedAlignedMapping, i)
+function Base.iterate(
+    d::BackedAlignedMapping{T, G},
+    i=nothing,
+) where {T, G <: Union{HDF5.File, HDF5.Group}}
     if isnothing(d.d)
         return nothing
     else
@@ -139,6 +128,15 @@ function Base.iterate(d::BackedAlignedMapping, i)
                (hdf5_object_name(next[1]) => backed_matrix(next[1]), next[2])
     end
 end
+function Base.iterate(d::BackedAlignedMapping{T, G}, i=nothing) where {T, G <: ZGroup}
+    if (isnothing(d.d))
+        return nothing
+    else
+        next = iterate(d.d, i)
+        return isnothing(next) ? next : (next[1][1] => backed_matrix(next[1][2]), next[2])
+    end
+end
+
 Base.length(d::BackedAlignedMapping) = isnothing(d.d) ? 0 : length(d.d)
 function Base.pop!(d::BackedAlignedMapping)
     if isnothing(d.d)
@@ -192,10 +190,10 @@ function copy_subset(
             J
         else
             (:)
-        end for (vdim, refdim) in T.parameters
+        end for (vdim, refdim) ∈ T.parameters
     )
-    for (k, v) in src
-        dst[k] = v[idx..., ((:) for i in 1:(ndims(v) - length(idx)))...]
+    for (k, v) ∈ src
+        dst[k] = v[idx..., ((:) for i ∈ 1:(ndims(v) - length(idx)))...]
     end
 end
 
@@ -208,7 +206,7 @@ end
 function aligned_view(d::AlignedMappingView{T}, A) where {T <: Tuple}
     idx = Vector{Union{Colon, typeof(d.indices).parameters...}}(undef, ndims(A))
     idx .= (:)
-    for ((vdim, refdim), cidx) in zip(T.parameters, d.indices)
+    for ((vdim, refdim), cidx) ∈ zip(T.parameters, d.indices)
         idx[vdim] = cidx
     end
     return @inbounds view(A, idx...)
@@ -249,7 +247,8 @@ Base.pop!(d::AlignedMappingView, k, default) =
 Base.parent(d::AlignedMappingView) = d.parent
 Base.parentindices(d::AlignedMappingView) = d.indices
 
-Base.setindex!(d::AlignedMappingView, v::AbstractArray, k) = throw(ArgumentError("Replacing or adding elements of an AlignedMappingView is not supported."))
+Base.setindex!(d::AlignedMappingView, v::AbstractArray, k) =
+    throw(ArgumentError("Replacing or adding elements of an AlignedMappingView is not supported."))
 
 function Base.view(parent::AbstractAlignedMapping{T}, indices...) where {T <: Tuple}
     @boundscheck if length(T.parameters) != length(indices)
@@ -262,7 +261,7 @@ function Base.view(parent::AbstractAlignedMapping{T}, indices...) where {T <: Tu
     return AlignedMappingView(parent, indices)
 end
 
-function Base.view(parentview::AlignedMappingView{T}, indices...) where T <: Tuple
+function Base.view(parentview::AlignedMappingView{T}, indices...) where {T <: Tuple}
     @boundscheck if length(T.parameters) != length(indices)
         throw(
             DimensionMismatch(

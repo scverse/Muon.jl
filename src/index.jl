@@ -58,7 +58,7 @@ function _getindex(idx::Index{T}, elem::T) where {T}
     ilength = _length(idx)
     if ilength > 0x0
         location = hash(elem) % ilength + 0x1
-        for probeposition in 0x1:(idx.longestprobe)
+        for probeposition ∈ 0x1:(idx.longestprobe)
             pos = idx.indices[location]
             if pos > 0x0 && isequal(idx.vals[pos], elem)
                 return location
@@ -79,7 +79,7 @@ function _getindex_array(idx::Index{T, V}, elem::T) where {T, V}
     ilength = _length(idx)
     if ilength > 0x0
         location = hash(elem) % ilength + 0x1
-        for probeposition in 0x1:(idx.longestprobe)
+        for probeposition ∈ 0x1:(idx.longestprobe)
             pos = idx.indices[location]
             if pos > 0x0 && isequal(idx.vals[pos], elem)
                 push!(locations, location)
@@ -100,7 +100,7 @@ function _getindex_byposition(idx::Index{T}, i::Integer) where {T}
     ilength = _length(idx)
     if ilength > 0x0
         location = hash(elem) % ilength + 0x1
-        for probeposition in 0x1:(idx.longestprobe)
+        for probeposition ∈ 0x1:(idx.longestprobe)
             pos = idx.indices[location]
             if pos > 0x0 && pos == i
                 return location
@@ -152,7 +152,7 @@ end
 
 function Index(elems::AbstractVector{T}) where {T}
     idx = Index{T}(length(elems))
-    for (i, e) in enumerate(elems)
+    for (i, e) ∈ enumerate(elems)
         _setindex!(idx, e, UInt(i))
     end
     idx.initiallongestprobe = idx.longestprobe
@@ -171,7 +171,7 @@ Base.getindex(
     idx::AbstractIndex{T, V},
     elems::AbstractVector{T},
     x::Union{Val{true}, Val{false}},
-) where {T, V} = isempty(elems) ? V[] : reduce(vcat, (getindex(idx, elem, x) for elem in elems))
+) where {T, V} = isempty(elems) ? V[] : reduce(vcat, (getindex(idx, elem, x) for elem ∈ elems))
 Base.in(elem::T, idx::AbstractIndex{T}) where {T} =
     getindex(idx, elem, Val(false), Val(false)) != 0x0
 
@@ -266,7 +266,7 @@ Base.values(si::SubIndex) = parent(si)[parentindices(si)]
 function Base.getindex(si::SubIndex{T}, elem::T, ::Val{true}, ::Val{false}) where {T}
     res = getindex(parent(si), elem, Val(true), Val(false))
     i = 0
-    @inbounds for r in res
+    @inbounds for r ∈ res
         position = findfirst(isequal(r), parentindices(si))
         if !isnothing(position)
             i += 1
@@ -284,7 +284,7 @@ function Base.getindex(
 ) where {T, V, I <: AbstractArray{Bool}}
     res = getindex(parent(si), elem, Val(true), Val(false))
     res = res[parentindices(si)[res]]
-    @inbounds for (i, r) in enumerate(res)
+    @inbounds for (i, r) ∈ enumerate(res)
         res[i] = si.revmapping[r, false, false]
     end
 
@@ -298,7 +298,7 @@ function Base.getindex(
 ) where {T, V, I <: AbstractArray{<:Integer}}
     res = getindex(parent(si), elem, Val(true), Val(false))
     i = 0
-    @inbounds for r in res
+    @inbounds for r ∈ res
         position = si.revmapping[r, false, false]
         if position > 0x0
             i += 1
@@ -315,7 +315,7 @@ function Base.getindex(
 ) where {T, V, I <: AbstractRange}
     res = getindex(parent(si), elem, Val(true), Val(false))
     j = 0
-    for i in 1:length(res)
+    for i ∈ 1:length(res)
         pos = findfirst(==(res[i]), parentindices(si))
         if !isnothing(pos)
             j += 1
@@ -383,7 +383,10 @@ function Base.getindex(si::SubIndex, i::Union{Integer, AbstractVector{<:Integer}
     @boundscheck checkbounds(si, i)
     return @inbounds parent(si)[Base.reindex((parentindices(si),), (i,))[1]]
 end
-function Base.getindex(si::SubIndex{T, V, Colon}, i::Union{Integer, AbstractVector{<:Integer}}) where {T, V}
+function Base.getindex(
+    si::SubIndex{T, V, Colon},
+    i::Union{Integer, AbstractVector{<:Integer}},
+) where {T, V}
     @boundscheck checkbounds(si, i)
     return @inbounds parent(si)[i]
 end
