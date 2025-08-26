@@ -1,8 +1,6 @@
-create_group(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString) =
-    HDF5.create_group(parent, name)
+create_group(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString) = HDF5.create_group(parent, name)
 
-delete_object(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString) =
-    HDF5.delete_object(parent, name)
+delete_object(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString) = HDF5.delete_object(parent, name)
 
 datatype(t::Type) = HDF5.datatype(t)
 function datatype(::Type{T}) where {T <: AbstractString}
@@ -29,11 +27,7 @@ is_bool(arr::HDF5.Dataset) = HDF5.datatype(arr) == datatype(Bool)
 
 write_attribute(obj::Union{HDF5.File, HDF5.Group, HDF5.Dataset}, attrname::AbstractString, data) =
     HDF5.write_attribute(obj, attrname, data)
-function write_attribute(
-    obj::Union{HDF5.File, HDF5.Group, HDF5.Dataset},
-    attrname::AbstractString,
-    data::Bool,
-)
+function write_attribute(obj::Union{HDF5.File, HDF5.Group, HDF5.Dataset}, attrname::AbstractString, data::Bool)
     dtype = datatype(Bool)
     dspace = HDF5.Dataspace(HDF5.API.h5s_create(HDF5.API.H5S_SCALAR))
     attr = create_attribute(obj, attrname, dtype, dspace)
@@ -79,15 +73,7 @@ function write_impl_array(
         if length(chunksize) == 0
             chunksize = Tuple(100 for _ ∈ 1:ndims(data))
         end
-        d = create_dataset(
-            parent,
-            name,
-            dtype,
-            dims,
-            chunk=chunksize,
-            shuffle=true,
-            deflate=compress,
-        )
+        d = create_dataset(parent, name, dtype, dims, chunk=chunksize, shuffle=true, deflate=compress)
     else
         d = create_dataset(parent, name, dtype, dims)
     end

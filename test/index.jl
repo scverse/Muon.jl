@@ -64,10 +64,7 @@ end
     @test_throws KeyError subidx1["a"]
     @test_throws KeyError subidx2["a"]
     @test_throws KeyError subidx3["a"]
-    @test subidx1["a", false, false] ==
-          subidx2["a", false, false] ==
-          subidx3["a", false, false] ==
-          0
+    @test subidx1["a", false, false] == subidx2["a", false, false] == subidx3["a", false, false] == 0
     @test subidx1["a", true, false] == subidx2["a", true, false] == subidx3["a", true, false] == []
     @test @view(subidx1[3:5]) == @view(subidx2[3:5]) == @view(subidx3[3:5]) == idx[28:30]
     @test @view(idx[:]) == idx

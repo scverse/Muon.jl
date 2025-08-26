@@ -34,11 +34,8 @@ function Base.getproperty(dset::TransposedDataset{<:ZArray}, s::Symbol)
 end
 
 HDF5.filename(dset::TransposedDataset{HDF5.Dataset}) = HDF5.filename(dset.dset)
-HDF5.copy_object(
-    src_obj::TransposedDataset,
-    dst_parent::Union{HDF5.File, HDF5.Group},
-    dst_path::AbstractString,
-) = copy_object(src_obj.dset, dst_parent, dst_path)
+HDF5.copy_object(src_obj::TransposedDataset, dst_parent::Union{HDF5.File, HDF5.Group}, dst_path::AbstractString) =
+    copy_object(src_obj.dset, dst_parent, dst_path)
 Base.isvalid(dset::TransposedDataset{HDF5.Dataset}) = isvalid(dset.dset)
 Base.isvalid(dset::TransposedDataset{<:ZArray}) = true
 function HDF5.readmmap(dset::TransposedDataset{HDF5.Dataset}, ::Type{T}) where {T}
@@ -47,8 +44,7 @@ end
 HDF5.ismmappable(dset::TransposedDataset{HDF5.Dataset}) = HDF5.ismmappable(dset.dset)
 HDF5.iscontiguous(dset::TransposedDataset{HDF5.Dataset}) = HDF5.iscontiguous(dset.dset)
 
-Base.to_index(A::HDF5.Dataset, I::AbstractUnitRange{<:Unsigned}) =
-    Base.to_index(A, UnitRange{Int}(I)) # hyperslab only supports Int indexes
+Base.to_index(A::HDF5.Dataset, I::AbstractUnitRange{<:Unsigned}) = Base.to_index(A, UnitRange{Int}(I)) # hyperslab only supports Int indexes
 Base.ndims(dset::TransposedDataset) = ndims(dset.dset)
 Base.size(dset::TransposedDataset) = reverse(size(dset.dset))
 Base.size(dset::TransposedDataset, d::Integer) = size(dset.dset, ndims(dset.dset) - d + 1)
@@ -58,8 +54,7 @@ Base.lastindex(dset::TransposedDataset, d::Int) = size(dset, d)
 HDF5.datatype(dset::TransposedDataset) = datatype(dset.dset)
 Base.read(dset::TransposedDataset) = read_matrix(dset.dset)
 
-Base.getindex(dset::TransposedDataset, i::Integer) =
-    getindex(dset.dset, to_indices(dset, (CartesianIndices(dset)[i],)))
+Base.getindex(dset::TransposedDataset, i::Integer) = getindex(dset.dset, to_indices(dset, (CartesianIndices(dset)[i],)))
 
 function Base.getindex(dset::TransposedDataset, I::Integer...)
     mat = getindex(dset.dset, reverse(I)...)
@@ -126,8 +121,7 @@ function _getindex(dset::TransposedDataset{HDF5.Dataset, T, N}, I) where {T, N}
     end
 end
 
-Base.setindex!(dset::TransposedDataset, v, i::Int) =
-    setindex!(dset.dset, v, ndims(dset.dset) - d + 1)
+Base.setindex!(dset::TransposedDataset, v, i::Int) = setindex!(dset.dset, v, ndims(dset.dset) - d + 1)
 function Base.setindex!(dset::TransposedDataset, v, I::Integer...)
     if ndims(v) > 1
         v = copy(v')
@@ -164,16 +158,7 @@ end
 
 function Base.show(io::IO, dset::TransposedDataset{<:ZArray})
     if isvalid(dset)
-        print(
-            io,
-            "Transposed ",
-            join(size(dset), "×"),
-            " Zarr dataset: ",
-            dset.path,
-            " (storage: ",
-            dset.storage,
-            ")",
-        )
+        print(io, "Transposed ", join(size(dset), "×"), " Zarr dataset: ", dset.path, " (storage: ", dset.storage, ")")
     else
         print(io, "Transposed Zarr datset: (invalid)")
     end

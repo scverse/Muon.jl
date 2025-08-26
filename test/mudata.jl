@@ -9,11 +9,7 @@ warn_msg2 = "Duplicated obs_names should not be present in different modalities 
 
 function make_ads()
     obs_names = ["obs_$i" for i ∈ 1:n]
-    ad1 = AnnData(
-        X=rand(n, d1),
-        obs_names=copy(obs_names),
-        var=DataFrame(testcol=["ad1_$i" for i ∈ 1:d1]),
-    )
+    ad1 = AnnData(X=rand(n, d1), obs_names=copy(obs_names), var=DataFrame(testcol=["ad1_$i" for i ∈ 1:d1]))
 
     obs_names[10] = obs_names[n] = "testobs"
     ad2 = AnnData(
@@ -24,11 +20,7 @@ function make_ads()
     )
 
     obs_names[10] = "obs_10"
-    ad3 = AnnData(
-        X=rand(n, d1),
-        obs_names=copy(obs_names),
-        var=DataFrame(commoncol=(d1 + 1):(2d1), ad3col=1:d1),
-    )
+    ad3 = AnnData(X=rand(n, d1), obs_names=copy(obs_names), var=DataFrame(commoncol=(d1 + 1):(2d1), ad3col=1:d1))
     return ad1, ad2, ad3
 end
 
@@ -76,8 +68,7 @@ end
 
     md["ad3"] = ad3
     @test_logs (:warn, warn_msg2) update!(md)
-    @test sort(names(md.var)) ==
-          ["ad1:testcol", "ad2:testcol", "ad3:ad3col", "commoncol", "mutestcol", "testcol"]
+    @test sort(names(md.var)) == ["ad1:testcol", "ad2:testcol", "ad3:ad3col", "commoncol", "mutestcol", "testcol"]
     @test !any(ismissing.(md.var.commoncol))
     @test sum(ismissing.(md.var.mutestcol[reshape(md.varm["ad1"], :)])) ==
           sum(ismissing.(md.var.mutestcol[reshape(md.varm["ad2"], :)])) ==
@@ -86,8 +77,7 @@ end
 end
 
 function test_row_slice(md, i1, n, d, j=:)
-    md1, md2, md3, md4 =
-        md[i1, :], md[collect(i1), :], md[unique(md.obs_names[i1]), :], md[1:n .∈ (i1,), :]
+    md1, md2, md3, md4 = md[i1, :], md[collect(i1), :], md[unique(md.obs_names[i1]), :], md[1:n .∈ (i1,), :]
 
     @test size(md1) ==
           size(md2) ==
@@ -175,8 +165,7 @@ end
         writefun(tempfile2, cmd)
         @test_logs (:warn, warn_msg2) (:warn, warn_msg) update!(cmd)
         read_md = (@test_logs (:warn, warn_msg2) (:warn, warn_msg) readfun(tempfile2, backed=false))
-        read_md_backed =
-            (@test_logs (:warn, warn_msg2) (:warn, warn_msg) readfun(tempfile2, backed=true))
+        read_md_backed = (@test_logs (:warn, warn_msg2) (:warn, warn_msg) readfun(tempfile2, backed=true))
         @test size(cmd) == size(read_md) == size(read_md_backed)
         @test cmd.obs_names == read_md.obs_names == read_md_backed.obs_names
         @test cmd.var_names == read_md.var_names == read_md_backed.var_names

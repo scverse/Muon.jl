@@ -5,8 +5,7 @@ Base.read(grp::ZGroup, name::AbstractString) = collect(grp[name])
 
 create_group(parent::ZGroup, name::AbstractString) = zgroup(parent, name)
 
-delete_from_store(store::Zarr.AbstractStore, path::AbstractString, name::AbstractString) =
-    delete!(store, path, name)
+delete_from_store(store::Zarr.AbstractStore, path::AbstractString, name::AbstractString) = delete!(store, path, name)
 delete_from_store(store::Zarr.DirectoryStore, path::AbstractString, name::AbstractString) =
     rm(joinpath(store.folder, path, name), recursive=true)
 
@@ -39,11 +38,7 @@ end
 
 read_scalar(d::ZArray) = d[]
 
-function write_scalar(
-    parent::ZGroup,
-    name::AbstractString,
-    data::T,
-) where {T <: Union{<:Number, <:AbstractString}}
+function write_scalar(parent::ZGroup, name::AbstractString, data::T) where {T <: Union{<:Number, <:AbstractString}}
     d = zcreate(T, parent, name)
     d[] = data
     return d
@@ -65,12 +60,7 @@ function write_impl(parent::ZGroup, name::AbstractString, data::T; kwargs...) wh
     write_attribute(parent[name], "encoding-version", "0.2.0")
 end
 
-function write_impl(
-    parent::ZGroup,
-    name::AbstractString,
-    data::T;
-    kwargs...,
-) where {T <: AbstractString}
+function write_impl(parent::ZGroup, name::AbstractString, data::T; kwargs...) where {T <: AbstractString}
     d = zcreate(T, parent, name)
     d[] = data
     write_attribute(parent[name], "encoding-type", "string")
@@ -107,8 +97,7 @@ function write_impl_array(
 end
 
 function zarr_filename(group::ZGroup)
-    candidates =
-        filter((i, type) -> type <: AbstractString, enumerate(fieldtypes(typeof(group.storage))))
+    candidates = filter((i, type) -> type <: AbstractString, enumerate(fieldtypes(typeof(group.storage))))
     return candidates[1]
 end
 
@@ -126,8 +115,7 @@ function zarr_heuristic_chunk(
 
     fullsize = length(arr) * _sizeof(T)
     chunks = [size(arr)...]
-    target_size =
-        clamp(round(Int, increment_bytes * 2^log10(fullsize / (1024 * 1024))), min_bytes, max_bytes)
+    target_size = clamp(round(Int, increment_bytes * 2^log10(fullsize / (1024 * 1024))), min_bytes, max_bytes)
 
     # start with right-most dimension to account for column-major order in Julia
     cdim = nd

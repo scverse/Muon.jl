@@ -120,10 +120,7 @@ function Base.getindex(dset::SparseDataset, I::AbstractUnitRange, J::AbstractUni
                 currdata = data[c1:c2][rowidx]
                 currrows = currrows[rowidx]
                 sort!(rowidx, currdata, currrows)
-                append!(
-                    newrows,
-                    currrows .- convert(eltype(newrows), first(I)) .+ convert(eltype(newrows), 1),
-                )
+                append!(newrows, currrows .- convert(eltype(newrows), first(I)) .+ convert(eltype(newrows), 1))
                 append!(newdata, currdata)
             end
         else
@@ -236,17 +233,10 @@ function Base.setindex!(dset::SparseDataset, x::Number, i::Integer, j::Integer)
         nonzeros(dset)[c1 + rowidx - 1] = x
     end
 end
-function Base.setindex!(
-    dset::SparseDataset,
-    x::AbstractArray{<:Number, 2},
-    I::AbstractUnitRange,
-    J::AbstractUnitRange,
-)
+function Base.setindex!(dset::SparseDataset, x::AbstractArray{<:Number, 2}, I::AbstractUnitRange, J::AbstractUnitRange)
     @boundscheck checkbounds(dset, I, J)
     length(x) == length(I) * length(J) || throw(
-        DimensionMismatch(
-            "tried to assign $(length(x)) elements to destination of size $(length(I) * length(J))",
-        ),
+        DimensionMismatch("tried to assign $(length(x)) elements to destination of size $(length(I) * length(J))"),
     )
     if dset.csr
         I, J = J, I
@@ -299,16 +289,7 @@ end
 
 function Base.show(io::IO, dset::SparseDataset{G}) where {G <: ZGroup}
     if isvalid(dset)
-        print(
-            io,
-            "Sparse ",
-            join(size(dset), "×"),
-            " Zarr dataset: ",
-            dset.path,
-            " (storage: ",
-            dset.storage,
-            ")",
-        )
+        print(io, "Sparse ", join(size(dset), "×"), " Zarr dataset: ", dset.path, " (storage: ", dset.storage, ")")
     else
         print(io, "Sparse Zarr dataset: (invalid)")
     end

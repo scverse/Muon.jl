@@ -40,9 +40,7 @@ function read_matrix(f::Dataset; kwargs...)
     end
     if haskey(attributes(f), "categories")
         categories = f[read_attribute(f, "categories")]
-        ordered =
-            haskey(attributes(categories), "ordered") &&
-            read_attribute(categories, "ordered") == true
+        ordered = haskey(attributes(categories), "ordered") && read_attribute(categories, "ordered") == true
         cats = read(categories)
         mat .+= 1
         mat = if ordered
@@ -53,10 +51,7 @@ function read_matrix(f::Dataset; kwargs...)
                 ),
             )
         else
-            PooledArray(
-                PooledArrays.RefArray(mat),
-                Dict{eltype(cats), eltype(mat)}(v => i for (i, v) ∈ enumerate(cats)),
-            )
+            PooledArray(PooledArrays.RefArray(mat), Dict{eltype(cats), eltype(mat)}(v => i for (i, v) ∈ enumerate(cats)))
         end
     end
     return mat
@@ -96,10 +91,7 @@ function read_matrix(f::Group; kwargs...)
             CategoricalVector{T}(undef, length(codes); levels=categories, ordered=ordered)
             copy!(mat.refs, codes)
         else
-            PooledArray(
-                PooledArrays.RefArray(codes),
-                Dict{T, eltype(codes)}(v => i for (i, v) ∈ enumerate(categories)),
-            )
+            PooledArray(PooledArrays.RefArray(codes), Dict{T, eltype(codes)}(v => i for (i, v) ∈ enumerate(categories)))
         end
         return mat
     else
@@ -120,9 +112,7 @@ function read_nullable_boolean_array(f::Group, kwargs...)
 end
 
 function read_dict_of_matrices(f::Group; kwargs...)
-    return Dict{String, AbstractArray{<:Number}}(
-        key => read_matrix(f[key]; kwargs...) for key ∈ keys(f)
-    )
+    return Dict{String, AbstractArray{<:Number}}(key => read_matrix(f[key]; kwargs...) for key ∈ keys(f))
 end
 
 function read_auto(f::Dataset; kwargs...)
@@ -197,12 +187,7 @@ function write_impl(parent::Group, name::AbstractString, data::Union{<:AbstractS
     write_attribute(dset, "encoding-version", "0.2.0")
 end
 
-function write_impl(
-    parent::Group,
-    name::AbstractString,
-    data::AbstractDict{<:AbstractString, <:Any};
-    kwargs...,
-)
+function write_impl(parent::Group, name::AbstractString, data::AbstractDict{<:AbstractString, <:Any}; kwargs...)
     if length(data) > 0
         g = create_group(parent, name)
         write_attribute(g, "encoding-type", "dict")
@@ -213,12 +198,7 @@ function write_impl(
     end
 end
 
-function write_impl(
-    parent::Group,
-    name::AbstractString,
-    data::Union{CategoricalArray, PooledArray};
-    kwargs...,
-)
+function write_impl(parent::Group, name::AbstractString, data::Union{CategoricalArray, PooledArray}; kwargs...)
     g = create_group(parent, name)
     write_attribute(g, "encoding-type", "categorical")
     write_attribute(g, "encoding-version", "0.2.0")
@@ -266,12 +246,7 @@ end
 write_impl(parent::Group, name::AbstractString, data::SubArray; kwargs...) =
     write_impl(parent, name, copy(data); kwargs...)
 
-function write_impl(
-    parent::Group,
-    name::AbstractString,
-    data::AbstractArray{Union{Bool, Missing}};
-    kwargs...,
-)
+function write_impl(parent::Group, name::AbstractString, data::AbstractArray{Union{Bool, Missing}}; kwargs...)
     g = create_group(parent, name)
 
     attrs = attributes(g)
@@ -307,8 +282,8 @@ function write_impl(
 )
     if ndims(data) > 1
         data =
-            data isa PermutedDimsArray && typeof(data).parameters[3] == Tuple(ndims(data):-1:1) ?
-            parent(data) : permutedims(data, ndims(data):-1:1) # transpose for h5py compatibility
+            data isa PermutedDimsArray && typeof(data).parameters[3] == Tuple(ndims(data):-1:1) ? parent(data) :
+            permutedims(data, ndims(data):-1:1) # transpose for h5py compatibility
     end                                             # copy because HDF5 apparently can't handle lazy Adjoints
 
     write_impl_array(parentgrp, name, data, compress, extensible)

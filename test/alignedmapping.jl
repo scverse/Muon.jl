@@ -16,12 +16,9 @@ function make_init_args(::Type{Muon.BackedAlignedMapping}, d::Dict, file)
     return (file, path)
 end
 
-@testset "$name" for (name, T) ∈ (
-    ("AlignedMapping", Muon.AlignedMapping),
-    ("BackedAlignedMapping", Muon.BackedAlignedMapping),
-)
-    files =
-        name == "BackedAlignedMapping" ? ((h5file, "HDF5"), (zarrfile, "Zarr")) : ((nothing, ""),)
+@testset "$name" for (name, T) ∈
+                     (("AlignedMapping", Muon.AlignedMapping), ("BackedAlignedMapping", Muon.BackedAlignedMapping))
+    files = name == "BackedAlignedMapping" ? ((h5file, "HDF5"), (zarrfile, "Zarr")) : ((nothing, ""),)
     @testset "$backend" for (file, backend) ∈ files
         @testset "ref: $ndims dimensions" for ndims ∈ 1:5
             ref = Array{Bool}(undef, (10 for i ∈ 1:ndims)...)
@@ -33,10 +30,7 @@ end
                 ref,
                 make_init_args(T, Dict("test" => arr3), file)...,
             )
-            mapping = T{Tuple{2 => 1, 1 => ndims, 3 => ndims}}(
-                ref,
-                make_init_args(T, Dict("arr1" => arr1), file)...,
-            )
+            mapping = T{Tuple{2 => 1, 1 => ndims, 3 => ndims}}(ref, make_init_args(T, Dict("arr1" => arr1), file)...)
             mapping["arr4"] = arr4
             @test_throws DimensionMismatch mapping["arr2"] = arr2
             @test_throws DimensionMismatch mapping["arr3"] = arr3

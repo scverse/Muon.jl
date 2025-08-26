@@ -41,20 +41,16 @@ mutable struct AnnData <: AbstractAnnData
         adata.var_names = Index(var_names)
 
         # observations
-        adata.obsm = StrAlignedMapping{Tuple{1 => 1}}(
-            adata,
-            haskey(file, "obsm") ? read_dict_of_mixed(file["obsm"]) : nothing,
-        )
+        adata.obsm =
+            StrAlignedMapping{Tuple{1 => 1}}(adata, haskey(file, "obsm") ? read_dict_of_mixed(file["obsm"]) : nothing)
         adata.obsp = StrAlignedMapping{Tuple{1 => 1, 2 => 1}}(
             adata,
             haskey(file, "obsp") ? read_dict_of_matrices(file["obsp"]) : nothing,
         )
 
         # Variables
-        adata.varm = StrAlignedMapping{Tuple{1 => 2}}(
-            adata,
-            haskey(file, "varm") ? read_dict_of_mixed(file["varm"]) : nothing,
-        )
+        adata.varm =
+            StrAlignedMapping{Tuple{1 => 2}}(adata, haskey(file, "varm") ? read_dict_of_mixed(file["varm"]) : nothing)
         adata.varp = StrAlignedMapping{Tuple{1 => 2, 2 => 2}}(
             adata,
             haskey(file, "varp") ? read_dict_of_matrices(file["varp"]) : nothing,
@@ -74,9 +70,7 @@ mutable struct AnnData <: AbstractAnnData
         end
 
         # unstructured
-        adata.uns =
-            haskey(file, "uns") ? read_dict_of_mixed(file["uns"], separate_index=false) :
-            Dict{String, Any}()
+        adata.uns = haskey(file, "uns") ? read_dict_of_mixed(file["uns"], separate_index=false) : Dict{String, Any}()
 
         return adata
     end
@@ -87,14 +81,8 @@ mutable struct AnnData <: AbstractAnnData
         obs_names::Union{AbstractVector{<:AbstractString}, Nothing}=nothing,
         var::Union{DataFrame, Nothing}=nothing,
         var_names::Union{AbstractVector{<:AbstractString}, Nothing}=nothing,
-        obsm::Union{
-            AbstractDict{<:AbstractString, <:Union{<:AbstractArray{<:Number}, DataFrame}},
-            Nothing,
-        }=nothing,
-        varm::Union{
-            AbstractDict{<:AbstractString, <:Union{<:AbstractArray{<:Number}, DataFrame}},
-            Nothing,
-        }=nothing,
+        obsm::Union{AbstractDict{<:AbstractString, <:Union{<:AbstractArray{<:Number}, DataFrame}}, Nothing}=nothing,
+        varm::Union{AbstractDict{<:AbstractString, <:Union{<:AbstractArray{<:Number}, DataFrame}}, Nothing}=nothing,
         obsp::Union{AbstractDict{<:AbstractString, <:AbstractMatrix{<:Number}}, Nothing}=nothing,
         varp::Union{AbstractDict{<:AbstractString, <:AbstractMatrix{<:Number}}, Nothing}=nothing,
         layers::Union{AbstractDict{<:AbstractString, <:AbstractMatrix{<:Number}}, Nothing}=nothing,
@@ -186,10 +174,7 @@ function writeh5ad(filename::AbstractString, adata::AbstractAnnData; compress::U
             write(hfile, adata, compress=compress)
             close(hfile)
             hfile = open(filename, "r+")
-            write(
-                hfile,
-                "AnnData (format-version=$ANNDATAVERSION;creator=$NAME;creator-version=$VERSION)",
-            )
+            write(hfile, "AnnData (format-version=$ANNDATAVERSION;creator=$NAME;creator-version=$VERSION)")
         finally
             close(hfile)
         end
@@ -288,22 +273,8 @@ end
 
 function Base.getindex(
     adata::AbstractAnnData,
-    I::Union{
-        OrdinalRange,
-        Colon,
-        AbstractVector{<:Integer},
-        AbstractVector{<:AbstractString},
-        Integer,
-        AbstractString,
-    },
-    J::Union{
-        OrdinalRange,
-        Colon,
-        AbstractVector{<:Integer},
-        AbstractVector{<:AbstractString},
-        Integer,
-        AbstractString,
-    },
+    I::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Integer, AbstractString},
+    J::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Integer, AbstractString},
 )
     @boundscheck checkbounds(adata, I, J)
     i, j = convertidx(I, adata.obs_names), convertidx(J, adata.var_names)
@@ -370,8 +341,7 @@ function Base.view(ad::AnnData, I, J)
 end
 function Base.view(ad::AnnDataView, I, J)
     @boundscheck checkbounds(ad, I, J)
-    i, j =
-        Base.reindex(parentindices(ad), (convertidx(I, ad.obs_names), convertidx(J, ad.var_names)))
+    i, j = Base.reindex(parentindices(ad), (convertidx(I, ad.obs_names), convertidx(J, ad.var_names)))
     return view(parent(ad), i, j)
 end
 

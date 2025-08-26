@@ -119,16 +119,14 @@ end
 function _delete!(idx::Index, oldkeyindex::Integer)
     lastidx = findnext(x -> x <= 0x1, idx.probepositions, oldkeyindex + 0x1)
     @inbounds if !isnothing(lastidx)
-        idx.indices[oldkeyindex:(lastidx - 0x2)] .=
-            @view idx.indices[(oldkeyindex + 0x1):(lastidx - 0x1)]
+        idx.indices[oldkeyindex:(lastidx - 0x2)] .= @view idx.indices[(oldkeyindex + 0x1):(lastidx - 0x1)]
         idx.probepositions[oldkeyindex:(lastidx - 0x2)] .=
             @view(idx.probepositions[(oldkeyindex + 0x1):(lastidx - 0x1)]) .- true
         idx.indices[lastidx - 0x1] = idx.probepositions[lastidx - 0x1] = false
     else
         if oldkeyindex < _length(idx)
             idx.indices[oldkeyindex:(end - 0x1)] .= @view idx.indices[(oldkeyindex + 0x1):end]
-            idx.probepositions[oldkeyindex:(end - 0x1)] .=
-                @view(idx.probepositions[(oldkeyindex + 0x1):end]) .- true
+            idx.probepositions[oldkeyindex:(end - 0x1)] .= @view(idx.probepositions[(oldkeyindex + 0x1):end]) .- true
         end
         if idx.probepositions[1] > 0x1
             idx.indices[end] = idx.indices[1]
@@ -139,8 +137,7 @@ function _delete!(idx::Index, oldkeyindex::Integer)
                 lastidx = oldkeyindex
             end
             idx.indices[0x1:(lastidx - 0x2)] .= @view idx.indices[0x2:(lastidx - 0x1)]
-            idx.probepositions[0x1:(lastidx - 0x2)] .=
-                @view(idx.probepositions[0x2:(lastidx - 0x1)]) .- true
+            idx.probepositions[0x1:(lastidx - 0x2)] .= @view(idx.probepositions[0x2:(lastidx - 0x1)]) .- true
             idx.indices[lastidx - 0x1] = idx.probepositions[lastidx - 0x1] = 0x0
         else
             idx.indices[end] = idx.probepositions[end] = 0x0
@@ -161,19 +158,12 @@ end
 
 Base.getindex(idx::AbstractIndex{T}, elem::T) where {T} = getindex(idx, elem, Val(false))
 Base.getindex(idx::AbstractIndex{T}, elem::T, x::Bool) where {T} = getindex(idx, elem, Val(x))
-Base.getindex(idx::AbstractIndex{T}, elem::T, x::Bool, y::Bool) where {T} =
-    getindex(idx, elem, Val(x), Val(y))
-Base.getindex(idx::AbstractIndex{T}, elems::AbstractVector{T}) where {T} =
-    getindex(idx, elems, Val(false))
-Base.getindex(idx::AbstractIndex{T}, elems::AbstractVector{T}, x::Bool) where {T} =
-    getindex(idx, elems, Val(x))
-Base.getindex(
-    idx::AbstractIndex{T, V},
-    elems::AbstractVector{T},
-    x::Union{Val{true}, Val{false}},
-) where {T, V} = isempty(elems) ? V[] : reduce(vcat, (getindex(idx, elem, x) for elem ∈ elems))
-Base.in(elem::T, idx::AbstractIndex{T}) where {T} =
-    getindex(idx, elem, Val(false), Val(false)) != 0x0
+Base.getindex(idx::AbstractIndex{T}, elem::T, x::Bool, y::Bool) where {T} = getindex(idx, elem, Val(x), Val(y))
+Base.getindex(idx::AbstractIndex{T}, elems::AbstractVector{T}) where {T} = getindex(idx, elems, Val(false))
+Base.getindex(idx::AbstractIndex{T}, elems::AbstractVector{T}, x::Bool) where {T} = getindex(idx, elems, Val(x))
+Base.getindex(idx::AbstractIndex{T, V}, elems::AbstractVector{T}, x::Union{Val{true}, Val{false}}) where {T, V} =
+    isempty(elems) ? V[] : reduce(vcat, (getindex(idx, elem, x) for elem ∈ elems))
+Base.in(elem::T, idx::AbstractIndex{T}) where {T} = getindex(idx, elem, Val(false), Val(false)) != 0x0
 
 Base.getindex(idx::Index{T}, elem::T, ::Val{true}, ::Val{false}) where {T} =
     @inbounds idx.indices[_getindex_array(idx, elem)] # exceptions may be undesirable in high-performance scenarios
@@ -276,12 +266,7 @@ function Base.getindex(si::SubIndex{T}, elem::T, ::Val{true}, ::Val{false}) wher
     resize!(res, i)
     return res
 end
-function Base.getindex(
-    si::SubIndex{T, V, I},
-    elem::T,
-    ::Val{true},
-    ::Val{false},
-) where {T, V, I <: AbstractArray{Bool}}
+function Base.getindex(si::SubIndex{T, V, I}, elem::T, ::Val{true}, ::Val{false}) where {T, V, I <: AbstractArray{Bool}}
     res = getindex(parent(si), elem, Val(true), Val(false))
     res = res[parentindices(si)[res]]
     @inbounds for (i, r) ∈ enumerate(res)
@@ -307,12 +292,7 @@ function Base.getindex(
     end
     return resize!(res, i)
 end
-function Base.getindex(
-    si::SubIndex{T, V, I},
-    elem::T,
-    ::Val{true},
-    ::Val{false},
-) where {T, V, I <: AbstractRange}
+function Base.getindex(si::SubIndex{T, V, I}, elem::T, ::Val{true}, ::Val{false}) where {T, V, I <: AbstractRange}
     res = getindex(parent(si), elem, Val(true), Val(false))
     j = 0
     for i ∈ 1:length(res)
@@ -358,12 +338,7 @@ function Base.getindex(
     res = getindex(parent(si), elem, Val(false), Val(false))
     return res > 0x0 ? si.revmapping[res, false, false] : res
 end
-function Base.getindex(
-    si::SubIndex{T, V, I},
-    elem::T,
-    ::Val{false},
-    ::Val{false},
-) where {T, V, I <: AbstractRange}
+function Base.getindex(si::SubIndex{T, V, I}, elem::T, ::Val{false}, ::Val{false}) where {T, V, I <: AbstractRange}
     res = getindex(parent(si), elem, Val(false), Val(false))
     if res > 0x0
         i = findfirst(==(res), parentindices(si))
@@ -383,10 +358,7 @@ function Base.getindex(si::SubIndex, i::Union{Integer, AbstractVector{<:Integer}
     @boundscheck checkbounds(si, i)
     return @inbounds parent(si)[Base.reindex((parentindices(si),), (i,))[1]]
 end
-function Base.getindex(
-    si::SubIndex{T, V, Colon},
-    i::Union{Integer, AbstractVector{<:Integer}},
-) where {T, V}
+function Base.getindex(si::SubIndex{T, V, Colon}, i::Union{Integer, AbstractVector{<:Integer}}) where {T, V}
     @boundscheck checkbounds(si, i)
     return @inbounds parent(si)[i]
 end
@@ -409,11 +381,7 @@ function Base.setindex!(si::SubIndex{T}, newval::T, oldval::T) where {T}
     @inbounds parent(si)[oldidx[foldidx]] = newval
     return si
 end
-function Base.setindex!(
-    si::SubIndex{T, V, I},
-    newval::T,
-    oldval::T,
-) where {T, V, I <: AbstractArray{Bool}}
+function Base.setindex!(si::SubIndex{T, V, I}, newval::T, oldval::T) where {T, V, I <: AbstractArray{Bool}}
     oldidx = parent(si)[oldval, true]
     oldidx = @inbounds oldidx[parentindices(si)[oldix]]
     if length(oldidx) == 0
@@ -422,11 +390,7 @@ function Base.setindex!(
     @inbounds parent(si)[oldidx[1]] = newval
     return si
 end
-function Base.setindex!(
-    si::SubIndex{T, V, I},
-    newval::T,
-    oldval::T,
-) where {T, V, I <: AbstractArray{<:Integer}}
+function Base.setindex!(si::SubIndex{T, V, I}, newval::T, oldval::T) where {T, V, I <: AbstractArray{<:Integer}}
     oldidx = parent(si)[oldval, true]
     foldidx = findfirst(in(si.revmapping), oldidx)
     if isnothing(foldidx)

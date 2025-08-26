@@ -10,10 +10,8 @@ spmatrix = sprand(20, 20, 0.3)
 matrix = rand(20, 20)
 
 @testset "$backend" for (file, backend) ∈ ((h5file, "HDF5"), (zarrfile, "Zarr"))
-    for (mat, T, name, issparse) ∈ (
-        (spmatrix, Muon.SparseDataset, "sparse", true),
-        (matrix, Muon.TransposedDataset, "transposed", false),
-    )
+    for (mat, T, name, issparse) ∈
+        ((spmatrix, Muon.SparseDataset, "sparse", true), (matrix, Muon.TransposedDataset, "transposed", false))
         mat_t = mat'
 
         Muon.write_attr(file, "mat", mat)
@@ -54,10 +52,7 @@ matrix = rand(20, 20)
             end
 
             @testset "range access" begin
-                @testset "range: $rowstart:$(rowstart + 4), $colstart:$(colstart + 4)" for (
-                    rowstart,
-                    colstart,
-                ) ∈ zip(
+                @testset "range: $rowstart:$(rowstart + 4), $colstart:$(colstart + 4)" for (rowstart, colstart) ∈ zip(
                     1:(size(mat, 1) - 4),
                     1:(size(mat, 2) - 4),
                 )
@@ -120,10 +115,7 @@ matrix = rand(20, 20)
             end
 
             @testset "range modification" begin
-                @testset "range: $rowstart:$(rowstart + 4), $colstart:$(colstart + 4)" for (
-                    rowstart,
-                    colstart,
-                ) ∈ zip(
+                @testset "range: $rowstart:$(rowstart + 4), $colstart:$(colstart + 4)" for (rowstart, colstart) ∈ zip(
                     1:(size(mat, 1) - 4),
                     1:(size(mat, 2) - 4),
                 )
@@ -139,10 +131,8 @@ matrix = rand(20, 20)
                     @test dset_t == mat_t
 
                     if issparse
-                        @test_throws KeyError dset[rI, rJ] =
-                            rand(eltype(dset), (length(rI), length(rJ)))
-                        @test_throws KeyError dset_t[rJ, rI] =
-                            rand(eltype(dset_t), (length(rJ), length(rI)))
+                        @test_throws KeyError dset[rI, rJ] = rand(eltype(dset), (length(rI), length(rJ)))
+                        @test_throws KeyError dset_t[rJ, rI] = rand(eltype(dset_t), (length(rJ), length(rI)))
                     end
                 end
             end

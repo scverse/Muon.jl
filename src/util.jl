@@ -82,10 +82,8 @@ end
 @inline function convertidx(idx::Integer, ref::AbstractIndex{<:AbstractString})
     return idx:idx
 end
-@inline convertidx(
-    idx::Union{AbstractString, AbstractVector{<:AbstractString}},
-    ref::AbstractIndex{<:AbstractString},
-) = ref[idx, true]
+@inline convertidx(idx::Union{AbstractString, AbstractVector{<:AbstractString}}, ref::AbstractIndex{<:AbstractString}) =
+    ref[idx, true]
 
 Base.axes(A::Union{AbstractMuData, AbstractAnnData}) = map(n -> Base.OneTo(n), size(A))
 isbacked(ad::Union{AbstractMuData, AbstractAnnData}) = !isnothing(file(ad))
@@ -205,11 +203,7 @@ function DataFrames.DataFrame(A::AnnData; layer::Union{String, Nothing}=nothing,
     rows = columns == :var ? :obs : :var
     colnames = getproperty(A, Symbol(columns, :_names))
     if !allunique(colnames)
-        throw(
-            ArgumentError(
-                "duplicate column names ($(columns)_names); run $(columns)_names_make_unique!",
-            ),
-        )
+        throw(ArgumentError("duplicate column names ($(columns)_names); run $(columns)_names_make_unique!"))
     end
     rownames = getproperty(A, Symbol(rows, :_names))
 

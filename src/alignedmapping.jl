@@ -3,21 +3,10 @@ abstract type AbstractAlignedMapping{T <: Tuple, K, V} <: AbstractDict{K, V} end
 struct AlignedMapping{T <: Tuple, K, R} <: AbstractAlignedMapping{
     T,
     K,
-    Union{
-        AbstractArray{<:Number},
-        AbstractArray{Union{Missing, T}} where T <: Number,
-        AbstractDataFrame,
-    },
+    Union{AbstractArray{<:Number}, AbstractArray{Union{Missing, T}} where T <: Number, AbstractDataFrame},
 }
     ref::R # any type as long as it supports size()
-    d::Dict{
-        K,
-        Union{
-            AbstractArray{<:Number},
-            AbstractArray{Union{Missing, T}} where T <: Number,
-            DataFrame,
-        },
-    }
+    d::Dict{K, Union{AbstractArray{<:Number}, AbstractArray{Union{Missing, T}} where T <: Number, DataFrame}}
 
     function AlignedMapping{T, K}(r, d::AbstractDict{K}) where {T <: Tuple, K}
         for (k, v) ∈ d
@@ -108,24 +97,19 @@ function Base.empty!(d::BackedAlignedMapping)
         end
     end
 end
-Base.getindex(d::BackedAlignedMapping, key) =
-    isnothing(d.d) ? throw(KeyError(key)) : backed_matrix(d.d[key])
+Base.getindex(d::BackedAlignedMapping, key) = isnothing(d.d) ? throw(KeyError(key)) : backed_matrix(d.d[key])
 Base.get(d::BackedAlignedMapping, key, default) =
     isnothing(d.d) || !haskey(d.d, key) ? default : backed_matrix(d.d[key])
 Base.get(default::Base.Callable, d::BackedAlignedMapping, key) =
     isnothing(d.d) || !haskey(d.d, key) ? default() : backed_matrix(d.d[key])
 Base.haskey(d::BackedAlignedMapping, key) = isnothing(d.d) ? false : haskey(d.d, key)
 Base.isempty(d::BackedAlignedMapping) = isnothing(d.d) ? true : isempty(d.d)
-function Base.iterate(
-    d::BackedAlignedMapping{T, G},
-    i=nothing,
-) where {T, G <: Union{HDF5.File, HDF5.Group}}
+function Base.iterate(d::BackedAlignedMapping{T, G}, i=nothing) where {T, G <: Union{HDF5.File, HDF5.Group}}
     if isnothing(d.d)
         return nothing
     else
         next = iterate(d.d, i)
-        return isnothing(next) ? next :
-               (hdf5_object_name(next[1]) => backed_matrix(next[1]), next[2])
+        return isnothing(next) ? next : (hdf5_object_name(next[1]) => backed_matrix(next[1]), next[2])
     end
 end
 function Base.iterate(d::BackedAlignedMapping{T, G}, i=nothing) where {T, G <: ZGroup}
@@ -177,26 +161,22 @@ function Base.setindex!(d::BackedAlignedMapping{T}, v::AbstractArray, k) where {
     write_attr(d.d, k, v)
 end
 
-function copy_subset(
-    src::AbstractAlignedMapping{T},
-    dst::AbstractAlignedMapping,
-    I,
-    J,
-) where {T <: Tuple}
-    idx = (if refdim == 1
-        I
-    elseif refdim == 2
-        J
-    else
-        (:)
-    end for (vdim, refdim) ∈ T.parameters)
+function copy_subset(src::AbstractAlignedMapping{T}, dst::AbstractAlignedMapping, I, J) where {T <: Tuple}
+    idx = (
+        if refdim == 1
+            I
+        elseif refdim == 2
+            J
+        else
+            (:)
+        end for (vdim, refdim) ∈ T.parameters
+    )
     for (k, v) ∈ src
         dst[k] = v[idx..., ((:) for i ∈ 1:(ndims(v) - length(idx)))...]
     end
 end
 
-struct AlignedMappingView{T <: Tuple, K, V, P <: AbstractAlignedMapping{T, K, V}} <:
-       AbstractAlignedMapping{T, K, V}
+struct AlignedMappingView{T <: Tuple, K, V, P <: AbstractAlignedMapping{T, K, V}} <: AbstractAlignedMapping{T, K, V}
     parent::P
     indices::Tuple
 end
@@ -213,8 +193,7 @@ end
 Base.delete!(d::AlignedMappingView, k) = delete!(d.parent, k)
 Base.empty!(d::AlignedMappingView) = empty!(d.parent)
 Base.getindex(d::AlignedMappingView, key) = aligned_view(d, getindex(d.parent, key))
-Base.get(d::AlignedMappingView, key, default) =
-    haskey(d.parent, key) ? aligned_view(d, get(d.parent, key)) : default
+Base.get(d::AlignedMappingView, key, default) = haskey(d.parent, key) ? aligned_view(d, get(d.parent, key)) : default
 Base.get(default::Base.Callable, d::AlignedMappingView, key) =
     haskey(d.parent, key) ? aligned_view(d, get(d.parent, key)) : default()
 Base.haskey(d::AlignedMappingView, key) = haskey(d.parent, key)
@@ -240,8 +219,7 @@ end
 Base.length(d::AlignedMappingView) = length(d.parent)
 Base.pop!(d::AlignedMappingView) = aligned_view(d, pop!(d.parent))
 Base.pop!(d::AlignedMappingView, k) = aligned_view(d, pop!(d.parent, k))
-Base.pop!(d::AlignedMappingView, k, default) =
-    haskey(d.parent, k) ? aligned_view(d, pop!(d.d, k)) : default
+Base.pop!(d::AlignedMappingView, k, default) = haskey(d.parent, k) ? aligned_view(d, pop!(d.d, k)) : default
 Base.parent(d::AlignedMappingView) = d.parent
 Base.parentindices(d::AlignedMappingView) = d.indices
 
