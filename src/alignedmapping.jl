@@ -183,15 +183,13 @@ function copy_subset(
     I,
     J,
 ) where {T <: Tuple}
-    idx = (
-        if refdim == 1
-            I
-        elseif refdim == 2
-            J
-        else
-            (:)
-        end for (vdim, refdim) ∈ T.parameters
-    )
+    idx = (if refdim == 1
+        I
+    elseif refdim == 2
+        J
+    else
+        (:)
+    end for (vdim, refdim) ∈ T.parameters)
     for (k, v) ∈ src
         dst[k] = v[idx..., ((:) for i ∈ 1:(ndims(v) - length(idx)))...]
     end

@@ -61,12 +61,12 @@ Base.read(dset::TransposedDataset) = read_matrix(dset.dset)
 Base.getindex(dset::TransposedDataset, i::Integer) =
     getindex(dset.dset, to_indices(dset, (CartesianIndices(dset)[i],)))
 
-function Base.getindex(dset::TransposedDataset, I::Vararg{<:Integer, N}) where {N}
+function Base.getindex(dset::TransposedDataset, I::Integer...)
     mat = getindex(dset.dset, reverse(I)...)
     return ndims(mat) == 1 ? mat : mat'
 end
 
-function Base.getindex(dset::TransposedDataset{G, T, N}, I...) where {G, T, N}
+function Base.getindex(dset::TransposedDataset, I...)
     @boundscheck checkbounds(dset, I...)
     I = to_indices(dset, I)
     emptydims = Vector{UInt8}()
@@ -128,7 +128,7 @@ end
 
 Base.setindex!(dset::TransposedDataset, v, i::Int) =
     setindex!(dset.dset, v, ndims(dset.dset) - d + 1)
-function Base.setindex!(dset::TransposedDataset, v, I::Vararg{<:Integer, N}) where {N}
+function Base.setindex!(dset::TransposedDataset, v, I::Integer...)
     if ndims(v) > 1
         v = copy(v')
     end
