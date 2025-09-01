@@ -1,4 +1,5 @@
 using Random
+using Logging
 using DataFrames
 
 Random.seed!(42)
@@ -229,10 +230,9 @@ end
             if unique && axis == 0x2
                 md = (@test_nowarn MuData(mod=Dict("ad1" => ad1, "ad2" => ad2, "ad3" => ad3), axis=axis))
             else
-                md = (@test_logs (:warn, warn_msg2) (:warn, warn_msg) MuData(
-                    mod=Dict("ad1" => ad1, "ad2" => ad2, "ad3" => ad3),
-                    axis=axis,
-                ))
+                md = with_logger(NullLogger()) do    # warning depends on the RNG, and differs between Julia versions
+                    MuData(mod=Dict("ad1" => ad1, "ad2" => ad2, "ad3" => ad3), axis=axis)
+                end
             end
 
             @testset "pull_$attr" begin
