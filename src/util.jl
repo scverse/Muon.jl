@@ -16,7 +16,7 @@ function hdf5_object_name(obj::Union{HDF5.File, HDF5.Group, HDF5.Dataset})
     return name[(last(findlast("/", name)) + 1):end]
 end
 
-function find_unique_colnames(mdata::MuData, property::Symbol, ncols::Int)
+function find_unique_colnames(mdata::MuData, property::Symbol, ncols::Unsigned)
     nchars = 16
     allunique = false
     local colnames::Vector{String}
@@ -27,18 +27,13 @@ function find_unique_colnames(mdata::MuData, property::Symbol, ncols::Int)
     end
 
     it = Iterators.flatten(((mdata,), values(mdata.mod)))
-    for i ∈ 1:ncols
+    for (i, colname) ∈ enumerate(colnames)
         finished = false
         while !finished
             for ad ∈ it
-                try
-                    names(getproperty(ad, property), colnames[i])
-                    colnames[i] = "_" * colnames[i]
+                if columnindex(getproperty(ad, property), colname) > 0
+                    colnames[i] = "_" * colname
                     break
-                catch e
-                    if !(e isa ArgumentError)
-                        rethrow(e)
-                    end
                 end
             end
             finished = true
@@ -113,66 +108,6 @@ Base.lastindex(A::Union{AbstractMuData, AbstractAnnData}, d::Integer) = size(A, 
 
 Base.copy(d::Union{MuDataView, AnnDataView}) = parent(d)[parentindices(d)...]
 
-"""
-    var_names_make_unique!(A::AnnData, join = '-')
-
-Make `A.var_names` unique by appending `join` and sequential numbers
-(1, 2, 3 etc) to duplicate elements, leaving the first unchanged.
-"""
-function var_names_make_unique!(A::AnnData, join='-')
-    index_make_unique!(A.var_names, join)
-end
-
-"""
-    obs_names_make_unique!(A::AnnData, join = '-')
-
-Make `A.obs_names` unique by appending `join` and sequential numbers
-(1, 2, 3 etc) to duplicate elements, leaving the first unchanged.
-"""
-function obs_names_make_unique!(A::AnnData, join='-')
-    index_make_unique!(A.obs_names, join)
-end
-
-function index_make_unique!(index, join)
-    duplicates = duplicateindices(index)
-
-    if isempty(duplicates)
-        @info "var names are already unique, doing nothing"
-        return nothing
-    end
-
-    example_colliding_names = []
-    set = Set(index)
-
-    for (name, positions) ∈ duplicates
-        i = 1
-        for pos ∈ Iterators.rest(positions, 2)
-            while true
-                potential = string(index[pos], join, i)
-                i += 1
-                if potential in set
-                    if length(example_colliding_names) <= 5
-                        push!(example_colliding_names, potential)
-                    end
-                else
-                    index[pos] = potential
-                    push!(set, potential)
-                    break
-                end
-            end
-        end
-    end
-
-    if !isempty(example_colliding_names)
-        @warn """
-              Appending $(join)[1-9...] to duplicates caused collision with another name.
-              Example(s): $example_colliding_names
-              This may make the names hard to interperet.
-              Consider setting a different delimiter with `join={delimiter}`
-              """
-    end
-end
-
 function duplicateindices(v::Muon.Index{T, I}) where {T <: AbstractString, I <: Integer}
     varnames = Dict{T, Vector{Int64}}()
 
@@ -186,36 +121,4 @@ function duplicateindices(v::Muon.Index{T, I}) where {T <: AbstractString, I <: 
 
     filter!(x -> length(last(x)) > 1, varnames)
     varnames
-end
-
-"""
-    DataFrame(A::AnnData; layer=nothing, columns=:var)
-
-Return a DataFrame containing the data matrix `A.X` (or `layer` by
-passing `layer="layername"`). By default, the first column contains
-`A.obs_names` and the remaining columns are named according to
-`A.var_names`, to obtain the transpose, pass `columns=:obs`.
-"""
-function DataFrames.DataFrame(A::AnnData; layer::Union{String, Nothing}=nothing, columns=:var)
-    if columns ∉ [:obs, :var]
-        throw(ArgumentError("columns must be :obs or :var (got: $columns)"))
-    end
-    rows = columns == :var ? :obs : :var
-    colnames = getproperty(A, Symbol(columns, :_names))
-    if !allunique(colnames)
-        throw(ArgumentError("duplicate column names ($(columns)_names); run $(columns)_names_make_unique!"))
-    end
-    rownames = getproperty(A, Symbol(rows, :_names))
-
-    M = if isnothing(layer)
-        A.X
-    elseif layer in keys(A.layers)
-        A.layers[layer]
-    else
-        throw(ArgumentError("no layer $layer in adata layers"))
-    end
-    df = DataFrame(columns == :var ? M : transpose(M), colnames)
-    setproperty!(df, rows, rownames)
-    select!(df, rows, All())
-    df
 end

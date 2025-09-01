@@ -4,14 +4,16 @@ using Random
 using SparseArrays
 import LinearAlgebra: Adjoint
 
+using EllipsisNotation
 using HDF5
 using Zarr
 using DataFrames
 using CategoricalArrays
 using StructArrays
 using PooledArrays
+using FillArrays
+using DataStructures
 import CompressHashDisplace: FrozenDict
-import DataStructures: OrderedDict
 using FileIO
 
 export readh5mu,
@@ -25,7 +27,11 @@ export readh5mu,
     isbacked,
     update_obs!,
     update_var!,
-    update!
+    update!,
+    push_obs!,
+    push_var!,
+    pull_obs!,
+    pull_var!
 export AnnData, MuData
 export var_names_make_unique!, obs_names_make_unique!
 

@@ -44,8 +44,8 @@ end
     @test_logs (:info,) var_names_make_unique!(ad)
     @test_logs (:info,) obs_names_make_unique!(ad)
     ad2 = deepcopy(ad)
-    ad2.var_names[3] == "10"
-    ad2.obs_names[90] == "obs_30"
+    ad2.var_names[3] = "10"
+    ad2.obs_names[90] = "obs_30"
     var_names_make_unique!(ad2)
     obs_names_make_unique!(ad2)
     @test allunique(ad2.var_names)

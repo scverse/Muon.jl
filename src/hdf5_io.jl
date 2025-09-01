@@ -20,7 +20,8 @@ end
 
 read_attribute(obj::Union{HDF5.Dataset, HDF5.Group, HDF5.File}, attrname::AbstractString) =
     HDF5.read_attribute(obj, attrname)
-attributes(obj::Union{HDF5.Dataset, HDF5.Group, HDF5.File}) = HDF5.attributes(obj)
+has_attribute(obj::Union{HDF5.Dataset, HDF5.Group, HDF5.File}, attrname::AbstractString) =
+    haskey(HDF5.attributes(obj), attrname)
 
 is_compound(arr::HDF5.Dataset) = HDF5.API.h5t_get_class(HDF5.datatype(arr)) == HDF5.API.H5T_COMPOUND
 is_bool(arr::HDF5.Dataset) = HDF5.datatype(arr) == datatype(Bool)

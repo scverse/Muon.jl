@@ -172,7 +172,7 @@ function copy_subset(src::AbstractAlignedMapping{T}, dst::AbstractAlignedMapping
         end for (vdim, refdim) ∈ T.parameters
     )
     for (k, v) ∈ src
-        dst[k] = v[idx..., ((:) for i ∈ 1:(ndims(v) - length(idx)))...]
+        dst[k] = v[idx..., ..]
     end
 end
 

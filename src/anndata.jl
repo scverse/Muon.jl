@@ -23,10 +23,9 @@ mutable struct AnnData <: AbstractAnnData
 
     function AnnData(file::Union{HDF5.File, HDF5.Group, ZGroup}, backed=false, checkversion=true)
         if checkversion
-            attrs = attributes(file)
-            if !haskey(attrs, "encoding-type")
+            if !has_attribute(file, "encoding-type")
                 @warn "This file was not created by muon, we can't guarantee that everything will work correctly"
-            elseif attrs["encoding-type"] != "anndata"
+            elseif read_attribute(file, "encoding-type") != "anndata"
                 error("This file does not appear to hold an AnnData object")
             end
         end
@@ -358,3 +357,94 @@ Base.parent(ad::AnnDataView) = ad.parent
 Base.parentindices(ad::AnnData) = axes(ad)
 Base.parentindices(ad::AnnDataView) = (ad.I, ad.J)
 file(ad::AnnDataView) = file(parent(ad))
+
+"""
+    var_names_make_unique!(ad::AnnData, join = '-')
+
+Make `A.var_names` unique by appending `join` and sequential numbers
+(1, 2, 3 etc) to duplicate elements, leaving the first unchanged.
+"""
+function var_names_make_unique!(ad::AnnData, join='-')
+    attr_make_unique!(ad, :var_names, join)
+end
+
+"""
+    obs_names_make_unique!(ad::AnnData, join = '-')
+
+Make `A.obs_names` unique by appending `join` and sequential numbers
+(1, 2, 3 etc) to duplicate elements, leaving the first unchanged.
+"""
+function obs_names_make_unique!(ad::AnnData, join='-')
+    attr_make_unique!(ad, :obs_names, join)
+end
+
+function attr_make_unique!(ad::AnnData, namesattr::Symbol, join)
+    index = getproperty(ad, namesattr)
+    duplicates = duplicateindices(index)
+
+    if isempty(duplicates)
+        @info "var names are already unique, doing nothing"
+        return ad
+    end
+
+    example_colliding_names = []
+    for (name, positions) ∈ duplicates
+        i = 1
+        for pos ∈ Iterators.rest(positions, 2)
+            while true
+                potential = string(index[pos], join, i)
+                i += 1
+                if potential ∈ index
+                    if length(example_colliding_names) <= 5
+                        push!(example_colliding_names, potential)
+                    end
+                else
+                    index[pos] = potential
+                    break
+                end
+            end
+        end
+    end
+
+    if !isempty(example_colliding_names)
+        @warn """
+              Appending $(join)[1-9...] to duplicates caused collision with another name.
+              Example(s): $example_colliding_names
+              This may make the names hard to interperet.
+              Consider setting a different delimiter with `join={delimiter}`
+              """
+    end
+    return ad
+end
+
+"""
+    DataFrame(ad::AnnData; layer=nothing, columns=:var)
+
+Return a DataFrame containing the data matrix `A.X` (or `layer` by
+passing `layer="layername"`). By default, the first column contains
+`A.obs_names` and the remaining columns are named according to
+`A.var_names`, to obtain the transpose, pass `columns=:obs`.
+"""
+function DataFrames.DataFrame(ad::AnnData; layer::Union{String, Nothing}=nothing, columns=:var)
+    if columns ∉ [:obs, :var]
+        throw(ArgumentError("columns must be :obs or :var (got: $columns)"))
+    end
+    rows = columns == :var ? :obs : :var
+    colnames = getproperty(ad, Symbol(columns, :_names))
+    if !allunique(colnames)
+        throw(ArgumentError("duplicate column names ($(columns)_names); run $(columns)_names_make_unique!"))
+    end
+    rownames = getproperty(ad, Symbol(rows, :_names))
+
+    M = if isnothing(layer)
+        ad.X
+    elseif layer in keys(ad.layers)
+        ad.layers[layer]
+    else
+        throw(ArgumentError("no layer $layer in adata layers"))
+    end
+    df = DataFrame(columns == :var ? M : transpose(M), colnames)
+    setproperty!(df, rows, rownames)
+    select!(df, rows, All())
+    df
+end

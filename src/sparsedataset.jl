@@ -53,7 +53,7 @@ nonzeros(dset::SparseDataset) = dset.group["data"]
 
 Base.isassigned(dset::Dataset, i) = i <= length(dset)
 
-Base.ndims(dset::SparseDataset) = length(attributes(dset.group)["shape"])
+Base.ndims(dset::SparseDataset) = length(read_attribute(dset.group, "shape"))
 Base.size(dset::SparseDataset) = Tuple(read_attribute(dset.group, "shape"))
 Base.size(dset::SparseDataset, d::Integer) = size(dset)[d]
 Base.length(dset::SparseDataset) = prod(size(dset))

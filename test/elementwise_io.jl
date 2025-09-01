@@ -10,10 +10,9 @@ zarrfile = zgroup(tempname())
         function test_encoding(data, expected_type, expected_version)
             Muon.write_attr(file, "encoding_types", data)
             dset = file["encoding_types"]
-            attrs = Muon.attributes(dset)
-            @test haskey(attrs, "encoding-type")
+            @test Muon.has_attribute(dset, "encoding-type")
             @test Muon.read_attribute(dset, "encoding-type") == expected_type
-            @test haskey(attrs, "encoding-version")
+            @test Muon.has_attribute(dset, "encoding-version")
             @test Muon.read_attribute(dset, "encoding-version") == expected_version
         end
 

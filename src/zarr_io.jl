@@ -1,5 +1,5 @@
 read_attribute(obj::Union{ZArray, ZGroup}, attrname::AbstractString) = obj.attrs[attrname]
-attributes(obj::Union{ZArray, ZGroup}) = obj.attrs
+has_attribute(obj::Union{ZArray, ZGroup}, attrname::AbstractString) = haskey(obj.attrs, attrname)
 Base.read(arr::ZArray) = collect(arr)
 Base.read(grp::ZGroup, name::AbstractString) = collect(grp[name])
 

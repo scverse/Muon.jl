@@ -1,7 +1,7 @@
 function read_dataframe(tablegroup::Group; separate_index=true, kwargs...)
     columns = read_attribute(tablegroup, "column-order")
 
-    if separate_index && haskey(attributes(tablegroup), "_index")
+    if separate_index && has_attribute(tablegroup, "_index")
         indexdsetname = read_attribute(tablegroup, "_index")
         rownames = read(tablegroup[indexdsetname])
     else
@@ -38,9 +38,9 @@ function read_matrix(f::Dataset; kwargs...)
     if ndims(f) > 1
         mat = PermutedDimsArray(mat, ndims(mat):-1:1) # transpose for h5py compatibility
     end
-    if haskey(attributes(f), "categories")
+    if has_attribute(f, "categories")
         categories = f[read_attribute(f, "categories")]
-        ordered = haskey(attributes(categories), "ordered") && read_attribute(categories, "ordered") == true
+        ordered = has_attribute(categories, "ordered") && read_attribute(categories, "ordered") == true
         cats = read(categories)
         mat .+= 1
         mat = if ordered
@@ -116,7 +116,7 @@ function read_dict_of_matrices(f::Group; kwargs...)
 end
 
 function read_auto(f::Dataset; kwargs...)
-    if haskey(attributes(f), "encoding-type")
+    if has_attribute(f, "encoding-type")
         enctype = read_attribute(f, "encoding-type")
         if endswith(enctype, "scalar") || enctype == "string"
             return read_scalar(f), nothing
@@ -125,7 +125,7 @@ function read_auto(f::Dataset; kwargs...)
     return read_matrix(f; kwargs...), nothing
 end
 function read_auto(f::Group; kwargs...)
-    if haskey(attributes(f), "encoding-type")
+    if has_attribute(f, "encoding-type")
         enctype = read_attribute(f, "encoding-type")
         if enctype == "dataframe"
             return read_dataframe(f; kwargs...)
@@ -249,7 +249,6 @@ write_impl(parent::Group, name::AbstractString, data::SubArray; kwargs...) =
 function write_impl(parent::Group, name::AbstractString, data::AbstractArray{Union{Bool, Missing}}; kwargs...)
     g = create_group(parent, name)
 
-    attrs = attributes(g)
     write_attribute(g, "encoding-type", "nullable-boolean")
     write_attribute(g, "encoding-version", "0.1.0")
 
