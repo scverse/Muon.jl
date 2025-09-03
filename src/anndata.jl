@@ -12,10 +12,10 @@ mutable struct AnnData <: AbstractAnnData
     var_names::Index{<:AbstractString}
 
     obsm::StrAlignedMapping{Tuple{1 => 1}, AnnData}
-    obsp::StrAlignedMapping{Tuple{1 => 1, 2 => 1}, AnnData}
+    obsp::StrAlignedMapping{Tuple{1 => 1, 2 => 1}, AnnData, false}
 
     varm::StrAlignedMapping{Tuple{1 => 2}, AnnData}
-    varp::StrAlignedMapping{Tuple{1 => 2, 2 => 2}, AnnData}
+    varp::StrAlignedMapping{Tuple{1 => 2, 2 => 2}, AnnData, false}
 
     layers::AbstractAlignedMapping{Tuple{1 => 1, 2 => 2}, String}
 
@@ -42,7 +42,7 @@ mutable struct AnnData <: AbstractAnnData
         # observations
         adata.obsm =
             StrAlignedMapping{Tuple{1 => 1}}(adata, haskey(file, "obsm") ? read_dict_of_mixed(file["obsm"]) : nothing)
-        adata.obsp = StrAlignedMapping{Tuple{1 => 1, 2 => 1}}(
+        adata.obsp = StrAlignedMapping{Tuple{1 => 1, 2 => 1}, false}(
             adata,
             haskey(file, "obsp") ? read_dict_of_matrices(file["obsp"]) : nothing,
         )
@@ -50,7 +50,7 @@ mutable struct AnnData <: AbstractAnnData
         # Variables
         adata.varm =
             StrAlignedMapping{Tuple{1 => 2}}(adata, haskey(file, "varm") ? read_dict_of_mixed(file["varm"]) : nothing)
-        adata.varp = StrAlignedMapping{Tuple{1 => 2, 2 => 2}}(
+        adata.varp = StrAlignedMapping{Tuple{1 => 2, 2 => 2}, false}(
             adata,
             haskey(file, "varp") ? read_dict_of_matrices(file["varp"]) : nothing,
         )
@@ -60,7 +60,7 @@ mutable struct AnnData <: AbstractAnnData
 
         # Layers
         if !backed
-            adata.layers = StrAlignedMapping{Tuple{1 => 1, 2 => 2}}(
+            adata.layers = StrAlignedMapping{Tuple{1 => 1, 2 => 2}, false}(
                 adata,
                 haskey(file, "layers") ? read_dict_of_matrices(file["layers"]) : nothing,
             )
@@ -113,10 +113,10 @@ mutable struct AnnData <: AbstractAnnData
         end
         adata = new(nothing, X, obs, Index(obs_names), var, Index(var_names))
         adata.obsm = StrAlignedMapping{Tuple{1 => 1}}(adata, obsm)
-        adata.obsp = StrAlignedMapping{Tuple{1 => 1, 2 => 1}}(adata, obsp)
+        adata.obsp = StrAlignedMapping{Tuple{1 => 1, 2 => 1}, false}(adata, obsp)
         adata.varm = StrAlignedMapping{Tuple{1 => 2}}(adata, varm)
-        adata.varp = StrAlignedMapping{Tuple{1 => 2, 2 => 2}}(adata, varp)
-        adata.layers = StrAlignedMapping{Tuple{1 => 1, 2 => 2}}(adata, layers)
+        adata.varp = StrAlignedMapping{Tuple{1 => 2, 2 => 2}, false}(adata, varp)
+        adata.layers = StrAlignedMapping{Tuple{1 => 1, 2 => 2}, false}(adata, layers)
         adata.uns = isnothing(uns) ? Dict{String, Any}() : uns
 
         return adata

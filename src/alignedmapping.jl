@@ -1,18 +1,25 @@
 abstract type AbstractAlignedMapping{T <: Tuple, K, V} <: AbstractDict{K, V} end
 
-struct AlignedMapping{T <: Tuple, K, R} <: AbstractAlignedMapping{
+struct AlignedMapping{T <: Tuple, K, R, D} <: AbstractAlignedMapping{
     T,
     K,
-    Union{AbstractArray{<:Number}, AbstractArray{Union{Missing, T}} where T <: Number, AbstractDataFrame},
+    Union{AbstractArray{<:Number}, AbstractArray{Union{Missing, T}} where T <: Number, D == true ? DataFrame : Union{}},
 }
     ref::R # any type as long as it supports size()
-    d::Dict{K, Union{AbstractArray{<:Number}, AbstractArray{Union{Missing, T}} where T <: Number, DataFrame}}
+    d::Dict{
+        K,
+        Union{
+            AbstractArray{<:Number},
+            AbstractArray{Union{Missing, T}} where T <: Number,
+            D == true ? DataFrame : Union{},
+        },
+    }
 
-    function AlignedMapping{T, K}(r, d::AbstractDict{K}) where {T <: Tuple, K}
+    function AlignedMapping{T, K, D}(r, d::AbstractDict{K}) where {T <: Tuple, K, D}
         for (k, v) ∈ d
             checkdim(T, v, r, k)
         end
-        return new{T, K, typeof(r)}(r, d)
+        return new{T, K, typeof(r), D}(r, d)
     end
 end
 
@@ -84,10 +91,23 @@ function Base.setindex!(d::AlignedMapping{T}, v::Union{AbstractArray, DataFrame}
 end
 Base.sizehint!(d::AlignedMapping, n) = sizehint!(d.d, n)
 
+AlignedMapping{T, K}(r, d::AbstractDict{K}, ::Val{true}) where {T <: Tuple, K} = AlignedMapping{T, K, true}(r, d)
+AlignedMapping{T, K}(r, d::AbstractDict{K}, ::Val{false}) where {T <: Tuple, K} = AlignedMapping{T, K, false}(r, d)
+AlignedMapping{T, K}(r, d::AbstractDict{K}) where {T <: Tuple, K} = AlignedMapping{T, K}(r, d, Val(true))
+
 AlignedMapping{T}(r, d::AbstractDict) where {T <: Tuple} = AlignedMapping{T, keytype(d)}(r, d)
-AlignedMapping{T, K}(ref) where {T, K} = AlignedMapping{T}(ref, Dict{K, AbstractMatrix{<:Number}}())
-AlignedMapping{T, K}(ref, ::Nothing) where {T, K} = AlignedMapping{T, K}(ref)
+AlignedMapping{T}(r, d::AbstractDict, ::Val{true}) where {T <: Tuple} = AlignedMapping{T, keytype(d)}(r, d, Val(true))
+AlignedMapping{T}(r, d::AbstractDict, ::Val{false}) where {T <: Tuple} = AlignedMapping{T, keytype(d)}(r, d, Val(false))
+
 AlignedMapping{T}(r, d::Group) where {T <: Tuple} = AligedMapping{T}(ref, read_dict_of_mixed(d))
+AlignedMapping{T}(r, d::Group, ::Val{true}) where {T <: Tuple} = AligedMapping{T}(ref, read_dict_of_mixed(d), Val(true))
+AlignedMapping{T}(r, d::Group, ::Val{false}) where {T <: Tuple} =
+    AligedMapping{T}(ref, read_dict_of_mixed(d), Val(false))
+
+AlignedMapping{T, K}(ref) where {T, K} = AlignedMapping{T, K}(ref, Dict{K, AbstractMatrix{<:Number}}())
+AlignedMapping{T, K}(ref, ::Nothing) where {T, K} = AlignedMapping{T, K}(ref)
+AlignedMapping{T, K, D}(ref) where {T, K, D} = AlignedMapping{T, K, D}(ref, Dict{K, AbstractMatrix{<:Number}}())
+AlignedMapping{T, K, D}(ref, ::Nothing) where {T, K, D} = AlignedMapping{T, K, D}(ref)
 
 Base.delete!(d::BackedAlignedMapping, k) = !isnothing(d.d) && delete_object(d.d, k)
 function Base.empty!(d::BackedAlignedMapping)
@@ -248,5 +268,5 @@ function Base.view(parentview::AlignedMappingView{T}, indices...) where {T <: Tu
     return AlignedMappingView(parent(parentview), Base.reindex(parentindices(parentview), indices))
 end
 
-const StrAlignedMapping{T <: Tuple, R} = AlignedMapping{T, String, R}
+const StrAlignedMapping{T <: Tuple, R, D} = AlignedMapping{T, String, R, D}
 const StrAlignedMappingView{T <: Tuple} = AlignedMappingView{T, String}

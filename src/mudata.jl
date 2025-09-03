@@ -7,14 +7,14 @@ mutable struct MuData <: AbstractMuData
     obs::DataFrame
     obs_names::Index{<:AbstractString}
     obsm::StrAlignedMapping{Tuple{1 => 1}, MuData}
-    obsp::StrAlignedMapping{Tuple{1 => 1, 2 => 1}, MuData}
-    obsmap::StrAlignedMapping{Tuple{1 => 1}, MuData}
+    obsp::StrAlignedMapping{Tuple{1 => 1, 2 => 1}, MuData, false}
+    obsmap::StrAlignedMapping{Tuple{1 => 1}, MuData, false}
 
     var::DataFrame
     var_names::Index{<:AbstractString}
     varm::StrAlignedMapping{Tuple{1 => 2}, MuData}
-    varp::StrAlignedMapping{Tuple{1 => 2, 2 => 2}, MuData}
-    varmap::StrAlignedMapping{Tuple{1 => 2}, MuData}
+    varp::StrAlignedMapping{Tuple{1 => 2, 2 => 2}, MuData, false}
+    varmap::StrAlignedMapping{Tuple{1 => 2}, MuData, false}
 
     uns::Dict{<:AbstractString, <:Any}
 
@@ -40,11 +40,11 @@ mutable struct MuData <: AbstractMuData
         # Observations
         mdata.obsm =
             StrAlignedMapping{Tuple{1 => 1}}(mdata, haskey(file, "obsm") ? read_dict_of_mixed(file["obsm"]) : nothing)
-        mdata.obsp = StrAlignedMapping{Tuple{1 => 1, 2 => 1}}(
+        mdata.obsp = StrAlignedMapping{Tuple{1 => 1, 2 => 1}, false}(
             mdata,
             haskey(file, "obsp") ? read_dict_of_matrices(file["obsp"]) : nothing,
         )
-        mdata.obsmap = StrAlignedMapping{Tuple{1 => 1}}(
+        mdata.obsmap = StrAlignedMapping{Tuple{1 => 1}, false}(
             mdata,
             haskey(file, "obsmap") ? read_dict_of_matrices(file["obsmap"]) : nothing,
         )
@@ -52,11 +52,11 @@ mutable struct MuData <: AbstractMuData
         # Variables
         mdata.varm =
             StrAlignedMapping{Tuple{1 => 2}}(mdata, haskey(file, "varm") ? read_dict_of_mixed(file["varm"]) : nothing)
-        mdata.varp = StrAlignedMapping{Tuple{1 => 2, 2 => 2}}(
+        mdata.varp = StrAlignedMapping{Tuple{1 => 2, 2 => 2}, false}(
             mdata,
             haskey(file, "varp") ? read_dict_of_matrices(file["varp"]) : nothing,
         )
-        mdata.varmap = StrAlignedMapping{Tuple{1 => 2}}(
+        mdata.varmap = StrAlignedMapping{Tuple{1 => 2}, false}(
             mdata,
             haskey(file, "varmap") ? read_dict_of_matrices(file["varmap"]) : nothing,
         )
@@ -117,10 +117,10 @@ mutable struct MuData <: AbstractMuData
 
         mdata.obsm = StrAlignedMapping{Tuple{1 => 1}}(mdata, obsm)
         mdata.varm = StrAlignedMapping{Tuple{1 => 2}}(mdata, varm)
-        mdata.obsp = StrAlignedMapping{Tuple{1 => 1, 2 => 1}}(mdata, obsp)
-        mdata.varp = StrAlignedMapping{Tuple{1 => 2, 2 => 2}}(mdata, varp)
-        mdata.obsmap = StrAlignedMapping{Tuple{1 => 1}}(mdata, obsmap)
-        mdata.varmap = StrAlignedMapping{Tuple{1 => 2}}(mdata, varmap)
+        mdata.obsp = StrAlignedMapping{Tuple{1 => 1, 2 => 1}, false}(mdata, obsp)
+        mdata.varp = StrAlignedMapping{Tuple{1 => 2, 2 => 2}, false}(mdata, varp)
+        mdata.obsmap = StrAlignedMapping{Tuple{1 => 1}, false}(mdata, obsmap)
+        mdata.varmap = StrAlignedMapping{Tuple{1 => 2}, false}(mdata, varmap)
         mdata.uns = isnothing(uns) ? Dict{String, Any}() : uns
         mdata.axis = isnothing(axis) ? 0x1 : axis
 
