@@ -96,8 +96,8 @@ AlignedMapping{T, K}(r, d::AbstractDict{K}, ::Val{false}) where {T <: Tuple, K} 
 AlignedMapping{T, K}(r, d::AbstractDict{K}) where {T <: Tuple, K} = AlignedMapping{T, K}(r, d, Val(true))
 
 AlignedMapping{T}(r, d::AbstractDict) where {T <: Tuple} = AlignedMapping{T, keytype(d)}(r, d)
-AlignedMapping{T}(r, d::AbstractDict, ::Val{true}) where {T <: Tuple} = AlignedMapping{T, keytype(d)}(r, d, Val(true))
-AlignedMapping{T}(r, d::AbstractDict, ::Val{false}) where {T <: Tuple} = AlignedMapping{T, keytype(d)}(r, d, Val(false))
+AlignedMapping{T}(r, d::AbstractDict, ::Val{true}) where {T <: Tuple} = AlignedMapping{T, keytype(d), true}(r, d)
+AlignedMapping{T}(r, d::AbstractDict, ::Val{false}) where {T <: Tuple} = AlignedMapping{T, keytype(d), false}(r, d)
 
 AlignedMapping{T}(r, d::Group) where {T <: Tuple} = AligedMapping{T}(ref, read_dict_of_mixed(d))
 AlignedMapping{T}(r, d::Group, ::Val{true}) where {T <: Tuple} = AligedMapping{T}(ref, read_dict_of_mixed(d), Val(true))
@@ -182,15 +182,13 @@ function Base.setindex!(d::BackedAlignedMapping{T}, v::AbstractArray, k) where {
 end
 
 function copy_subset(src::AbstractAlignedMapping{T}, dst::AbstractAlignedMapping, I, J) where {T <: Tuple}
-    idx = (
-        if refdim == 1
-            I
-        elseif refdim == 2
-            J
-        else
-            (:)
-        end for (vdim, refdim) ∈ T.parameters
-    )
+    idx = (if refdim == 1
+        I
+    elseif refdim == 2
+        J
+    else
+        (:)
+    end for (vdim, refdim) ∈ T.parameters)
     for (k, v) ∈ src
         dst[k] = v[idx..., ..]
     end
