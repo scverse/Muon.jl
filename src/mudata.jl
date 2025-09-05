@@ -1,5 +1,54 @@
 abstract type AbstractMuData end
 
+"""
+A multimodal data object that stores collections of [`AnnData`](@ref) objects.
+
+# Constructor
+```julia
+MuData(;
+    mod::Union{AbstractDict{<:AbstractString, AnnData}, Nothing}=nothing,
+    obs::Union{DataFrame, Nothing}=nothing,
+    obs_names::Union{AbstractVector{<:AbstractString}, Nothing}=nothing,
+    var::Union{DataFrame, Nothing}=nothing,
+    var_names::Union{AbstractVector{<:AbstractString}, Nothing}=nothing,
+    obsm::Union{AbstractDict{<:AbstractString, <:Union{<:AbstractArray{<:Number}, DataFrame}}, Nothing}=nothing,
+    varm::Union{AbstractDict{<:AbstractString, <:Union{<:AbstractArray{<:Number}, DataFrame}}, Nothing}=nothing,
+    obsp::Union{AbstractDict{<:AbstractString, <:AbstractMatrix{<:Number}}, Nothing}=nothing,
+    varp::Union{AbstractDict{<:AbstractString, <:AbstractMatrix{<:Number}}, Nothing}=nothing,
+    obsmap::Union{AbstractDict{<:AbstractString, <:AbstractVector{<:Integer}}, Nothing}=nothing,
+    varmap::Union{AbstractDict{<:AbstractString, <:AbstractVector{<:Integer}}, Nothing}=nothing,
+    uns::Union{AbstractDict{<:AbstractString, <:Any}, Nothing}=nothing,
+    axis::Union{Integer, Nothing}=nothing,
+)
+```
+
+# Keyword arguments / fields of the object
+- `mod`: A dictionary of [`AnnData`](@ref) objects.
+- `obs`: A [`DataFrame`](@extref DataFrames.DataFrame) with observation-level metadata.
+- `obs_names`: A vector of observation names (identifiers). The names correspond to `obs_names`
+  of the [`AnnData`](@ref) objects.
+- `var`: A [`DataFrame`](@extref DataFrames.DataFrame) with variable-level metadata
+- `var_names`: A vector of variable names (identifiers). The names correspond to `var_names`
+  of the [`AnnData`](@ref) objects.
+- `obsm`: Dictionary of observation-level metadata.
+- `varm`: Dictionary of variable-level metadata.
+- `obsp`: Dictionary of pairwise observation-level metadata. Each element of `obsp` is a square matrix.
+- `varp`: Dictionary of pairwise variable-level metadata. Each element of `varp` is a square matrix.
+- `obsmap`: Dictionary with one integer vector for each modality. The vectors contain for each
+  observation in the MuData object the index of corresponding observation in the respective [`AnnData`](@ref)
+  object, or 0 if the observation is not present. This argument to the constructor should generally not be
+  required unless you know what you're doing.
+- `varmap`: Dictionary with one integer vector for each modality. The vectors contain for each
+  variable in the MuData object the index of the corresponding variable in the respective [`AnnData`](@ref)
+  object, or 0 if the observation is not present. This argument to the constructor should generally not be
+  required unless you know what you're doing.
+- `uns`: Dictionary with unstructured metadata.
+- `axis`: Axis of the object. `axis=1` (default) indicates sharing of observations, each [`AnnData`](@ref)
+  object is treated as a separate modality with no overlapping variables. `axis=2` indicates sharing of
+  variables, each [`AnnData`](@ref) is treated as a dataset with no overlapping observations. `axis=0`
+  indicates sharing of both observations and variables, useful when the different [`AnnData`](@ref) objects
+  are subsets of the same dataset.
+"""
 mutable struct MuData <: AbstractMuData
     file::Union{HDF5.File, ZGroup, Nothing}
     mod::OrderedDict{String, AnnData}
@@ -133,6 +182,16 @@ end
 
 file(mu::MuData) = mu.file
 
+"""
+    readh5mu(filename::AbstractString; backed=false)::MuData
+
+Read a [`MuData`](@ref) object stored in an `h5mu` file.
+
+In `backed` mode, matrices `X` and `layers` for each modality are not read into memory, but are
+instead represented by proxy objects reading the required matrix elements from disk upon access.
+
+See also [`readzarrmu`](@ref), [`writeh5mu`](@ref), [`writezarrmu`](@ref), [`isbacked`](@ref).
+"""
 function readh5mu(filename::AbstractString; backed=false)
     filename = abspath(filename) # this gets stored in the HDF5 objects for backed datasets
     if String(read(filename, 6)) != "MuData"
@@ -160,6 +219,16 @@ function readh5mu(filename::AbstractString; backed=false)
     return mdata
 end
 
+"""
+    readzarr(filename::AbstractString; backed=false)::MuData
+
+Read a [`MuData`](@ref) object stored in a Zarr file.
+
+In `backed` mode, matrices `X` and `layers` for each modality are not read into memory, but are
+instead represented by proxy objects reading the required matrix elements from disk upon access.
+
+See also [`readh5mu`](@ref), [`writeh5mu`](@ref), [`writezarrmu`](@ref), [`isbacked`](@ref).
+"""
 function readzarrmu(filename::AbstractString; backed=false)
     filename = abspath(filename) # this gets stored in the Zarr objects for backed datasets
     if !backed
@@ -180,6 +249,15 @@ function readzarrmu(filename::AbstractString; backed=false)
     return mdata
 end
 
+"""
+    writeh5mu(filename::AbstractString, mudata::AbstractMuData; compress::UInt8=0x9)
+
+Write a [`MuData`](@ref) object to disk using the h5mu format (HDF5 with a particular structure).
+
+`compress` indicates the level of compression to apply, from 0 (no compression) to 9 (highest compression).
+
+See also [`writezarrmu`](@ref), [`readh5mu`](@ref), [`readzarrmu`](@ref).
+"""
 function writeh5mu(filename::AbstractString, mudata::AbstractMuData; compress::UInt8=0x9)
     filename = abspath(filename)
     if isnothing(file(mudata)) || filename != HDF5.filename(file(mudata))
@@ -198,6 +276,15 @@ function writeh5mu(filename::AbstractString, mudata::AbstractMuData; compress::U
     return nothing
 end
 
+"""
+    writezarrmu(filename::AbstractString, mudata::AbstractMuData; compress::UInt8=0x9)
+
+Write a [`MuData`](@ref) object to disk using the Zarr format.
+
+`compress` indicates the level of compression to apply, from 0 (no compression) to 9 (highest compression).
+
+See also [`writeh5mu`](@ref), [`readh5mu`](@ref), [`readzarrmu`](@ref).
+"""
 function writezarrmu(filename::AbstractString, mudata::AbstractMuData; compress::UInt8=0x9)
     filename = abspath(filename)
     if isnothing(file(mudata)) || filename != zarr_filename(file(mudata))
@@ -228,7 +315,7 @@ function Base.write(parent::Group, mudata::AbstractMuData; compress::UInt8=0x9)
 end
 
 function Base.write(mudata::AbstractMuData; compress::UInt8=0x9)
-    if isnothing(file(mudata))
+    if !isbacked(mudata)
         error("mudata is not backed, need somewhere to write to")
     end
     for adata ∈ values(mudata.mod)
@@ -257,10 +344,22 @@ save(f::File{format"h5mu"}, data::AbstractMuData; compress::UInt8=0x9) = writeh5
 Base.size(mdata::AbstractMuData) = (length(mdata.obs_names), length(mdata.var_names))
 Base.size(mdata::AbstractMuData, d::Integer) = size(mdata)[d]
 
+"""
+    getindex(mdata::AbstractMuData, modality::Union{AbstractString, Symbol})::AnnData
+
+Get a modality from `mdata`.
+"""
 Base.getindex(mdata::AbstractMuData, modality::Symbol) = mdata.mod[string(modality)]
 Base.getindex(mdata::AbstractMuData, modality::AbstractString) = mdata.mod[modality]
+
+"""
+    setindex!(mdata::AbstractMuData, ad::AnnData, key::Union{AbstractString, Symbol})
+
+Insert or overwrite a modality in `mdata`.
+"""
 Base.setindex!(mdata::MuData, ad::AnnData, key::AbstractString) = setindex!(mdata.mod, ad, key)
 Base.setindex!(mdata::MuData, ad::AnnData, key::Symbol) = setindex!(mdata.mod, ad, string(key))
+
 function Base.getindex(
     mdata::MuData,
     I::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
@@ -672,14 +771,76 @@ function _push_attr!(
     return mdata
 end
 
+"""
+    update_obs!(mdata::MuData)
+
+
+Update the [`MuData`](@ref)'s `obs_names` and `obsmap` with information from all modalities.
+
+See also [`update_var!`](@ref), [`update!`](@ref).
+"""
 update_obs!(mdata::MuData) = _update_attr!(mdata, :obs, 0x1)
+
+"""
+    update_var!(mdata::MuData)
+
+
+Update the [`MuData`](@ref)'s `var_names` and `varmap` with information from all modalities.
+
+See also [`update_obs!`](@ref), [`update!`](@ref).
+"""
 update_var!(mdata::MuData) = _update_attr!(mdata, :var, 0x2)
+
+"""
+    update!(mdata::MuData)
+
+Update the [`MuData`](@ref) object with information from all modalities.
+
+This function should be called after adding or removing modalities. It will update the [`MuData`](@ref)'s `obs_names` and
+`var_names` as well as the `obsmap` and `varmap.
+
+See also [`update_obs!`](@ref), [`update_var!`](@ref).
+"""
 function update!(mdata::MuData)
     update_obs!(mdata)
     update_var!(mdata)
     return mdata
 end
 
+"""
+    pull_obs!(
+        mdata::MuData;
+        columns::Union{AbstractVector{<:AbstractString}, NTuple{N, <:AbstractString}, AbstractString, Nothing}=nothing,
+        mods::Union{AbstractVector{<:AbstractString}, NTuple{M, <:AbstractString}, AbstractString, Nothing}=nothing,
+        common::Bool=true,
+        join_common::Union{Bool, Nothing}=nothing,
+        nonunique::Bool=true,
+        join_nonunique::Bool=false,
+        unique::Bool=true,
+        prefix_unique::Bool=true,
+        drop::Bool=false,
+        only_drop::Bool=false,
+    ) where {N, M}
+
+Copy metadata from the `.obs` of the individual modalities to the global `.obs` of the [`MuData`](@ref) object,
+overwriting or updating existing columns.
+
+# Arguments
+- `mdata`: The [`MuData`](@ref) object.
+- `columns`: List of columns to pull from the modalities. Pulls everything by default.
+- `mods`: List of modalities to pull from. Pull from all modalities by default.
+- `common`: Whether to pull common columns. Common columns exist in all modalities.
+- `join_common`: Whether to join common columns. Joined columns do not have a modality prefix. Defaults to `true` if `mdata.axis == 0x2`
+  (shared `.var`), `false` otherwise.
+- `nonunique`: Whether to pull nonunique columns. Non-unique columns exist in at least two, but not all modalities.
+- `join_nonunique`: Whether to join non-unique columns. Joined columns do not have a modality prefix.
+- `unique`: Whether to pull unique columns. Unique columns exist in exactly one modality.
+- `prefix_unique`: Whether to prefix unique columns with the modality name.
+- `drop`: Whether to delete columns from the modalities after pulling.
+- `only_drop`: Whether to only delete the columns from the modalities, but not actually pull them. Implies `drop=true`.
+
+See also [`pull_var!`](@ref), [`push_obs!`](@ref), [`push_var!`](@ref).
+"""
 pull_obs!(
     mdata::MuData;
     columns::Union{AbstractVector{<:AbstractString}, NTuple{N, <:AbstractString}, AbstractString, Nothing}=nothing,
@@ -707,6 +868,40 @@ pull_obs!(
     drop=drop,
     only_drop=only_drop,
 )
+"""
+    pull_var!(
+        mdata::MuData;
+        columns::Union{AbstractVector{<:AbstractString}, NTuple{N, <:AbstractString}, AbstractString, Nothing}=nothing,
+        mods::Union{AbstractVector{<:AbstractString}, NTuple{M, <:AbstractString}, AbstractString, Nothing}=nothing,
+        common::Bool=true,
+        join_common::Union{Bool, Nothing}=nothing,
+        nonunique::Bool=true,
+        join_nonunique::Bool=false,
+        unique::Bool=true,
+        prefix_unique::Bool=true,
+        drop::Bool=false,
+        only_drop::Bool=false,
+    ) where {N, M}
+
+Copy metadata from the `.var` of the individual modalities to the global `.var` of the [`MuData`](@ref) object,
+overwriting or updating existing columns.
+
+# Arguments
+- `mdata`: The [`MuData`](@ref) object.
+- `columns`: Columns to pull from the modalities. Pulls everything by default.
+- `mods`: Modalities to pull from. Pull from all modalities by default.
+- `common`: Whether to pull common columns. Common columns exist in all modalities.
+- `join_common`: Whether to join common columns. Joined columns do not have a modality prefix. Defaults to `true` if `mdata.axis == 0x1`
+  (shared `.obs`), `false` otherwise.
+- `nonunique`: Whether to pull nonunique columns. Non-unique columns exist in at least two, but not all modalities.
+- `join_nonunique`: Whether to join non-unique columns. Joined columns do not have a modality prefix.
+- `unique`: Whether to pull unique columns. Unique columns exist in exactly one modality.
+- `prefix_unique`: Whether to prefix unique columns with the modality name.
+- `drop`: Whether to delete columns from the modalities after pulling.
+- `only_drop`: Whether to only delete the columns from the modalities, but not actually pull them. Implies `drop=true`.
+
+See also [`pull_obs!`](@ref), [`push_obs!`](@ref), [`push_var!`](@ref).
+"""
 pull_var!(
     mdata::MuData;
     columns::Union{AbstractVector{<:AbstractString}, NTuple{N, <:AbstractString}, AbstractString, Nothing}=nothing,
@@ -735,6 +930,31 @@ pull_var!(
     only_drop=only_drop,
 )
 
+"""
+    push_obs!(
+        mdata::MuData;
+        columns::Union{AbstractVector{<:AbstractString}, NTuple{N, <:AbstractString}, AbstractString, Nothing}=nothing,
+        mods::Union{AbstractVector{<:AbstractString}, NTuple{M, <:AbstractString}, AbstractString, Nothing}=nothing,
+        common::Bool=true,
+        prefixed::Bool=true,
+        drop::Bool=false,
+        only_drop::Bool=false,
+    ) where {N, M}
+
+Copy metadata from `mdata.obs` to the `.obs` of the individual modalities, overwriting existing columns.
+
+# Arguments
+- `mdata`: The [`MuData`](@ref) object.
+- `columns`: Columns to push. Pushes everything by default.
+- `mods`: Modalities to push to. Pushes to all modalities by default.
+- `common`: Whether to push common columns. Common columns do not have modality prefixes. Cannot be used together with `columns`.
+- `prefixed`: Whether to push columns with a modality prefix. Only push to the respective modalities. Cannot be used together
+  with `columns`.
+- `drop`: Whether to delete columns from `mdata.obs` after pushing.
+- `only_drop`: Whether to only delete the columns from `mdata.obs`, but not actually push them. Implies `drop=true`.
+
+See also [`push_var!`](@ref), [`pull_obs!`](@ref), [`pull_var!`](@ref).
+"""
 push_obs!(
     mdata::MuData;
     columns::Union{AbstractVector{<:AbstractString}, NTuple{N, <:AbstractString}, AbstractString, Nothing}=nothing,
@@ -745,6 +965,32 @@ push_obs!(
     only_drop::Bool=false,
 ) where {N, M} =
     _push_attr!(mdata, :obs, 0x1, columns, mods, common=common, prefixed=prefixed, drop=drop, only_drop=only_drop)
+
+"""
+    push_var!(
+        mdata::MuData;
+        columns::Union{AbstractVector{<:AbstractString}, NTuple{N, <:AbstractString}, AbstractString, Nothing}=nothing,
+        mods::Union{AbstractVector{<:AbstractString}, NTuple{M, <:AbstractString}, AbstractString, Nothing}=nothing,
+        common::Bool=true,
+        prefixed::Bool=true,
+        drop::Bool=false,
+        only_drop::Bool=false,
+    ) where {N, M}
+
+Copy metadata from `mdata.var` to the `.var` of the individual modalities, overwriting existing columns.
+
+# Arguments
+- `mdata`: The [`MuData`](@ref) object.
+- `columns`: Columns to push. Pushes everything by default.
+- `mods`: Modalities to push to. Pushes to all modalities by default.
+- `common`: Whether to push common columns. Common columns do not have modality prefixes. Cannot be used together with `columns`.
+- `prefixed`: Whether to push columns with a modality prefix. Only push to the respective modalities. Cannot be used together
+  with `columns`.
+- `drop`: Whether to delete columns from `mdata.obs` after pushing.
+- `only_drop`: Whether to only delete the columns from `mdata.obs`, but not actually push them. Implies `drop=true`.
+
+See also [`push_obs!`](@ref), [`pull_obs!`](@ref), [`pull_var!`](@ref).
+"""
 push_var!(
     mdata::MuData;
     columns::Union{AbstractVector{<:AbstractString}, NTuple{N, <:AbstractString}, AbstractString, Nothing}=nothing,
@@ -777,7 +1023,11 @@ struct MuDataView{Ti, Tj} <: AbstractMuData
     uns::Dict{<:AbstractString, <:Any}
 end
 
-function Base.view(mu::MuData, I, J)
+function Base.view(
+    mu::MuData,
+    I::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
+    J::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
+)
     @boundscheck checkbounds(mu, I, J)
     i, j = convertidx(I, mu.obs_names), convertidx(J, mu.var_names)
     mod = Dict(
@@ -805,13 +1055,21 @@ function Base.view(mu::MuData, I, J)
         mu.uns,
     )
 end
-function Base.view(mu::MuDataView, I, J)
+function Base.view(
+    mu::MuDataView,
+    I::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
+    J::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
+)
     @boundscheck checkbounds(mu, I, J)
     i, j = Base.reindex(parentindices(mu), (convertidx(I, mu.obs_names), convertidx(J, mu.var_names)))
     return view(parent(mu), i, j)
 end
 
-function Base.getindex(mu::MuDataView, I, J)
+function Base.getindex(
+    mu::MuDataView,
+    I::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
+    J::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
+)
     @boundscheck checkbounds(mu, I, J)
     i, j = Base.reindex(parentindices(mu), (convertidx(I, mu.obs_names), convertidx(J, mu.var_names)))
     return getindex(parent(mu), i, j)
@@ -823,13 +1081,32 @@ Base.parentindices(mu::MuData) = axes(mu)
 Base.parentindices(mu::MuDataView) = (mu.I, mu.J)
 file(mu::MuDataView) = file(parent(mu))
 
-obs_names_make_unique!(mdata::MuData) = attr_make_unique(mdata, :obs, 0x1)
-var_names_make_unique!(mdata::MuData) = attr_make_unique(mdata, :obs, 0x2)
-function attr_make_unique!(mdata::MuData, attr::Symbol, axis::UInt8)
+"""
+    obs_names_make_unique!(mdata::MuData, join='-')
+
+Call `obs_names_make_unique!` for each modality.
+
+If there are `obs_names` which are the same for multiple modalities, the modality name is prepended to al `obs_names`.
+
+See also [`var_names_make_unique!(::MuData)`](@ref), [`obs_names_make_unique!(::AnnData)`](@ref), [`var_names_make_unique!(::AnnData)`](@ref)
+"""
+obs_names_make_unique!(mdata::MuData, join='-') = attr_make_unique(mdata, :obs, 0x1, join)
+
+"""
+    var_names_make_unique!(mdata::MuData, join='-')
+
+Call `var_names_make_unique!` for each modality.
+
+If there are `var_names` which are the same for multiple modalities, the modality name is prepended to al `var_names`.
+
+See also [`obs_names_make_unique!(::MuData)`](@ref), [`obs_names_make_unique!(::AnnData)`](@ref), [`var_names_make_unique!(::AnnData)`](@ref)
+"""
+var_names_make_unique!(mdata::MuData, join='-') = attr_make_unique(mdata, :obs, 0x2, join)
+function attr_make_unique!(mdata::MuData, attr::Symbol, axis::UInt8, join='-')
     namesattr = Symbol(string(attr) * "_names")
 
     for ad ∈ values(mdata.mod)
-        attr_make_unique!(ad, namesattr)
+        attr_make_unique!(ad, namesattr, join)
     end
     mods = collect(keys(mdata.mod))
     have_duplicates = false

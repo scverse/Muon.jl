@@ -16,6 +16,8 @@ using DataStructures
 import CompressHashDisplace: FrozenDict
 using FileIO
 
+using Compat
+
 export readh5mu,
     readh5ad,
     readzarrmu,
@@ -31,10 +33,11 @@ export readh5mu,
     push_obs!,
     push_var!,
     pull_obs!,
-    pull_var!
+    pull_var!,
+    var_names_make_unique!,
+    obs_names_make_unique!
 export AnnData, MuData
-export var_names_make_unique!, obs_names_make_unique!
-
+@compat public write, size, getindex, setindex!, view
 import Pkg
 # this executes only during precompilation
 let
@@ -57,4 +60,46 @@ include("anndata.jl")
 include("mudata.jl")
 include("util.jl")
 
+# documentation common for AnnData and MuData
+"""
+    getindex(
+        data::Union{AbstractAnnData, AbstractMuData},
+        I::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
+        J::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
+    )
+
+Subset `data` to observations `I` and variables `J`.
+
+Indexing can be performed by numerical index or by name, where names are looked up in `data.obs_names` and `data.var_names`.
+"""
+getindex
+
+"""
+    view(data::Union{AbstractAnnData, AbstractMuData},
+        I::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
+        J::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
+    )
+
+Like [`getindex`](@ref), but returns a lightweight object that lazily references the parent object.
+"""
+view
+
+"""
+    size(data::Union{AbstractAnnData, AbstractMuData}, [dim::Integer])
+
+Return a tuple containing the number of observations and variables of `adata`. Optionally you can
+specify a dimension to get just the length of that dimension.
+"""
+size
+
+"""
+    write(data::Union{AbstractAnnData, AbstractMuData}; compress::UInt8=0x9)
+    write(parent::Union{HDF5.File, HDF5.Group, ZGroup}, data::Union{AbstractAnnData, AbstractMuData}; compress::UInt8=0x9)
+
+Write the `data` to disk.
+
+The first form writes the metadata of a backed [`AnnData`](@ref) or [`MuData`](@ref) object to disk.
+The second form writes the `data` to an already open HDF5 or Zarr file into the group `parent`.
+"""
+write
 end # module

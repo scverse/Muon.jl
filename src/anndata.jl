@@ -1,5 +1,39 @@
 abstract type AbstractAnnData end
 
+"""
+An annotated data object that stores data matrices with associated metadata.
+
+# Constructor
+```julia
+AnnData(;
+    X::AbstractMatrix{<:Number},
+    obs::Union{DataFrame, Nothing}=nothing,
+    obs_names::Union{AbstractVector{<:AbstractString}, Nothing}=nothing,
+    var::Union{DataFrame, Nothing}=nothing,
+    var_names::Union{AbstractVector{<:AbstractString}, Nothing}=nothing,
+    obsm::Union{AbstractDict{<:AbstractString, <:Union{<:AbstractArray{<:Number}, DataFrame}}, Nothing}=nothing,
+    varm::Union{AbstractDict{<:AbstractString, <:Union{<:AbstractArray{<:Number}, DataFrame}}, Nothing}=nothing,
+    obsp::Union{AbstractDict{<:AbstractString, <:AbstractMatrix{<:Number}}, Nothing}=nothing,
+    varp::Union{AbstractDict{<:AbstractString, <:AbstractMatrix{<:Number}}, Nothing}=nothing,
+    layers::Union{AbstractDict{<:AbstractString, <:AbstractMatrix{<:Number}}, Nothing}=nothing,
+    uns::Union{AbstractDict{<:AbstractString, <:Any}, Nothing}=nothing,
+)
+```
+
+# Keyword arguments / fields of the object
+- `X`: An observations × variables matrix.
+- `obs`: A [`DataFrame`](@extref DataFrames.DataFrame) with observation-level metadata.
+- `obs_names`: A vector of observation names (identifiers).
+- `var`: A [`DataFrame`](@extref DataFrames.DataFrame) with variable-level metadata.
+- `var_names`: A vector of ariable names (identifiers).
+- `obsm`: Dictionary with observation-level metadata.
+- `varm`: Dictionary of observation-level metadata.
+- `obsp`: Dictionary of pairwise observation-level metadata. Each element of `obsp` is a square matrix.
+- `varp`: Dictionary of pairwise variable-level metadata. Each element of `varp` is a square matrix.
+- `layers`: Dictionary of additional observations × variables matrices, e.g. for different processing/normalization
+  steps.
+- `uns`: Dictionary with unstructured metadata.
+"""
 mutable struct AnnData <: AbstractAnnData
     file::Union{HDF5.File, HDF5.Group, ZGroup, Nothing}
 
@@ -125,6 +159,16 @@ end
 
 file(ad::AnnData) = ad.file
 
+"""
+    readh5ad(filename::AbstractString; backed=false)::AnnData
+
+Read an [`AnnData`](@ref) object stored in an `h5ad` file.
+
+In `backed` mode, matrices `X` and `layers` are not read into memory, but are instead represented
+by proxy objects reading the required matrix elements from disk upon access.
+
+See also [`readzarrad`](@ref), [`writeh5ad`](@ref), [`writezarrad`](@ref), [`isbacked`](@ref).
+"""
 function readh5ad(filename::AbstractString; backed=false)
     filename = abspath(filename) # this gets stored in the HDF5 objects for backed datasets
     if !backed
@@ -145,6 +189,16 @@ function readh5ad(filename::AbstractString; backed=false)
     return adata
 end
 
+"""
+    readzarrad(filename::AbstractString; backed=false)::AnnData
+
+Read an [`AnnData`](@ref) object stored in a Zarr file.
+
+In `backed` mode, matrices `X` and `layers` are not read into memory, but are instead represented
+by proxy objects reading the required matrix elements from disk upon access.
+
+See also [`readh5ad`](@ref), [`writeh5ad`](@ref), [`writezarrad`](@ref), [`isbacked`](@ref).
+"""
 function readzarrad(filename::AbstractString; backed=false)
     filename = abspath(filename)
     if !backed
@@ -165,6 +219,15 @@ function readzarrad(filename::AbstractString; backed=false)
     return adata
 end
 
+"""
+    writeh5ad(filename::AbstractString, adata::AbstractAnnData; compress::UInt8=0x9)
+
+Write an [`AnnData`](@ref) object to disk using the h5ad format (HDF5 with a particular structure).
+
+`compress` indicates the level of compression to apply, from 0 (no compression) to 9 (highest compression).
+
+See also [`writezarrad`](@ref), [`readh5ad`](@ref), [`readzarrad`](@ref).
+"""
 function writeh5ad(filename::AbstractString, adata::AbstractAnnData; compress::UInt8=0x9)
     filename = abspath(filename)
     if isnothing(file(adata)) || filename != HDF5.filename(file(adata))
@@ -183,6 +246,15 @@ function writeh5ad(filename::AbstractString, adata::AbstractAnnData; compress::U
     return nothing
 end
 
+"""
+    writezarrad(filename::AbstractString, adata::AbstractAnnData; compress::UInt8=0x9)
+
+Write an [`AnnData`](@ref) object to disk using the Zarr format.
+
+`compress` indicates the level of compression to apply, from 0 (no compression) to 9 (highest compression).
+
+See also [`writeh5ad`](@ref), [`readh5ad`](@ref), [`readzarrad`](@ref).
+"""
 function writezarrad(filename::AbstractString, adata::AbstractAnnData; compress::UInt8=0x9)
     filename = abspath(filename)
     if isnothing(file(adata)) || filename != zarr_filename(file(adata))
@@ -202,6 +274,12 @@ function _write(parent::Group, name::AbstractString, adata::AbstractAnnData; com
     g = create_group(parent, name)
     write(g, adata, compress=compress)
 end
+
+"""
+    write(parent::Union{HDF5.File, HDF5.Group, ZGroup}, name::AbstractString, adata::AbstractAnnData; compress::UInt8=0x9)
+
+Write the `adata` to an already open HDF5 or Zarr file into the group `parent` as a subgroup with name `name`.
+"""
 Base.write(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
@@ -229,7 +307,7 @@ function Base.write(parent::Group, adata::AbstractAnnData; compress::UInt8=0x9)
     end
 end
 
-function Base.write(adata; compress::UInt8=0x9)
+function Base.write(adata::AbstractAnnData; compress::UInt8=0x9)
     if file(adata) === nothing
         error("adata is not backed, need somewhere to write to")
     end
@@ -359,20 +437,24 @@ Base.parentindices(ad::AnnDataView) = (ad.I, ad.J)
 file(ad::AnnDataView) = file(parent(ad))
 
 """
-    var_names_make_unique!(ad::AnnData, join = '-')
+    var_names_make_unique!(ad::AnnData, join='-')
 
-Make `A.var_names` unique by appending `join` and sequential numbers
+Make `ad.var_names` unique by appending `join` and sequential numbers
 (1, 2, 3 etc) to duplicate elements, leaving the first unchanged.
+
+See also [`obs_names_make_unique!(::AnnData)`](@ref).
 """
 function var_names_make_unique!(ad::AnnData, join='-')
     attr_make_unique!(ad, :var_names, join)
 end
 
 """
-    obs_names_make_unique!(ad::AnnData, join = '-')
+    obs_names_make_unique!(ad::AnnData, join='-')
 
-Make `A.obs_names` unique by appending `join` and sequential numbers
+Make `ad.obs_names` unique by appending `join` and sequential numbers
 (1, 2, 3 etc) to duplicate elements, leaving the first unchanged.
+
+See also [`var_names_make_unique!(::AnnData)`](@ref).
 """
 function obs_names_make_unique!(ad::AnnData, join='-')
     attr_make_unique!(ad, :obs_names, join)
@@ -420,10 +502,10 @@ end
 """
     DataFrame(ad::AnnData; layer=nothing, columns=:var)
 
-Return a DataFrame containing the data matrix `A.X` (or `layer` by
+Return a DataFrame containing the data matrix `ad.X` (or `layer` by
 passing `layer="layername"`). By default, the first column contains
-`A.obs_names` and the remaining columns are named according to
-`A.var_names`, to obtain the transpose, pass `columns=:obs`.
+`ad.obs_names` and the remaining columns are named according to
+`ad.var_names`, to obtain the transpose, pass `columns=:obs`.
 """
 function DataFrames.DataFrame(ad::AnnData; layer::Union{String, Nothing}=nothing, columns=:var)
     if columns ∉ [:obs, :var]

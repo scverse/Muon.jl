@@ -81,6 +81,14 @@ end
     ref[idx, true]
 
 Base.axes(A::Union{AbstractMuData, AbstractAnnData}) = map(n -> Base.OneTo(n), size(A))
+
+"""
+    isbacked(ad::Union{AbstractMuData, AbstractAnnData})::Bool
+
+Return `true` if `ad` is backed on disk, and `false` otherwise.
+
+See also [`readh5ad`](@ref), [`readzarrad`](@ref), [`readh5mu`](@ref), [`readzarrmu`](@ref).
+"""
 isbacked(ad::Union{AbstractMuData, AbstractAnnData}) = !isnothing(file(ad))
 
 @inline function Base.checkbounds(::Type{Bool}, A::Union{AbstractMuData, AbstractAnnData}, I...)
