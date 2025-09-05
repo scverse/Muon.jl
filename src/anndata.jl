@@ -308,7 +308,7 @@ function Base.write(parent::Group, adata::AbstractAnnData; compress::UInt8=0x9)
 end
 
 function Base.write(adata::AbstractAnnData; compress::UInt8=0x9)
-    if file(adata) === nothing
+    if !isbacked(adata)
         error("adata is not backed, need somewhere to write to")
     end
     write_metadata(file(adata), adata, compress=compress)
