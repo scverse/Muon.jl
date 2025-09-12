@@ -462,39 +462,38 @@ end
 
 function attr_make_unique!(ad::AnnData, namesattr::Symbol, join)
     index = getproperty(ad, namesattr)
-    duplicates = duplicateindices(index)
+    if !allunique(index)
+        duplicates = duplicateindices(index)
 
-    if isempty(duplicates)
-        @info "var names are already unique, doing nothing"
-        return ad
-    end
-
-    example_colliding_names = []
-    for (name, positions) ∈ duplicates
-        i = 1
-        for pos ∈ Iterators.rest(positions, 2)
-            while true
-                potential = string(index[pos], join, i)
-                i += 1
-                if potential ∈ index
-                    if length(example_colliding_names) <= 5
-                        push!(example_colliding_names, potential)
+        example_colliding_names = []
+        for (name, positions) ∈ duplicates
+            i = 1
+            for pos ∈ Iterators.rest(positions, 2)
+                while true
+                    potential = string(index[pos], join, i)
+                    i += 1
+                    if potential ∈ index
+                        if length(example_colliding_names) <= 5
+                            push!(example_colliding_names, potential)
+                        end
+                    else
+                        index[pos] = potential
+                        break
                     end
-                else
-                    index[pos] = potential
-                    break
                 end
             end
         end
-    end
 
-    if !isempty(example_colliding_names)
-        @warn """
-              Appending $(join)[1-9...] to duplicates caused collision with another name.
-              Example(s): $example_colliding_names
-              This may make the names hard to interperet.
-              Consider setting a different delimiter with `join={delimiter}`
-              """
+        if !isempty(example_colliding_names)
+            @warn """
+                Appending $(join)[1-9...] to duplicates caused collision with another name.
+                Example(s): $example_colliding_names
+                This may make the names hard to interperet.
+                Consider setting a different delimiter with `join={delimiter}`
+                """
+        end
+    else
+        @info "var names are already unique, doing nothing"
     end
     return ad
 end

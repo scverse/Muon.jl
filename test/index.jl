@@ -47,11 +47,17 @@ end
     dupidx = Muon.Index(["test1", "test2", "test3", "test4", "test1", "test6"])
     @test dupidx["test1"] ∈ (1, 5)
     @test sort(dupidx["test1", true]) == [1, 5]
+    @test !allunique(dupidx)
+    @test dupidx.duplicates == 1
     dupidx[5] = "test5"
     @test dupidx[1] == "test1"
     @test dupidx[5] == "test5"
+    @test allunique(dupidx)
+    @test dupidx.duplicates == 0
     dupidx[5] = "test2"
     @test dupidx[5] == "test2"
+    @test !allunique(dupidx)
+    @test dupidx.duplicates == 1
 end
 
 @testset "views" begin
@@ -68,4 +74,18 @@ end
     @test subidx1["a", true, false] == subidx2["a", true, false] == subidx3["a", true, false] == []
     @test @view(subidx1[3:5]) == @view(subidx2[3:5]) == @view(subidx3[3:5]) == idx[28:30]
     @test @view(idx[:]) == idx
+end
+
+@testset "views with duplicates" begin
+    dupidx = Muon.Index(["test1", "test2", "test3", "test4", "test1", "test6"])
+    subidx1, subidx2 = @view(dupidx[3:end]), @view(dupidx[[1, 2, 5]])
+    @test allunique(subidx1)
+    @test !allunique(subidx2)
+    subidx1[3] = "test5"
+    @test allunique(dupidx)
+    @test allunique(subidx1)
+    @test allunique(subidx2)
+    dupidx[5] = "test2"
+    @test allunique(subidx1)
+    @test !allunique(subidx2)
 end

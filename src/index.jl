@@ -9,6 +9,7 @@ mutable struct Index{T, V} <: AbstractIndex{T, V}
     longestprobe::V
     initiallongestprobe::V
     deletions::V
+    duplicates::V
 
     function Index{T}(nelements::Integer) where {T}
         size = ceil(nelements / 0.9) # 0.9 load factor
@@ -18,9 +19,10 @@ mutable struct Index{T, V} <: AbstractIndex{T, V}
             Vector{T}(undef, nelements),
             zeros(mintype, mintype(size)),
             zeros(mintype, mintype(size)),
-            0,
-            0,
-            0,
+            0x0,
+            0x0,
+            0x0,
+            0x0,
         )
     end
 end
@@ -33,9 +35,14 @@ function _setindex!(idx::Index{T, V}, elem::T, position::Unsigned) where {T, V}
     k = position
     location = hash(elem) % _length(idx) + 0x1
     prevlongestprobe = idx.longestprobe
+    is_duplicate = false
     @inbounds while k != 0x0
         probeposition += 0x1
         recordpos = idx.probepositions[location]
+        if !is_duplicate && recordpos > 0 && isequal(idx.vals[idx.indices[location]], elem)
+            idx.duplicates += 0x1
+            is_duplicate = true
+        end
         if probeposition > recordpos
             k, idx.indices[location] = idx.indices[location], k
             idx.probepositions[location] = probeposition
@@ -45,7 +52,7 @@ function _setindex!(idx::Index{T, V}, elem::T, position::Unsigned) where {T, V}
         location = location == _length(idx) ? UInt(0x1) : location + 0x1
     end
 
-    # reset longestprobe after some deletions deletions, this should maintain stable performance for _getindex and _getindex_array
+    # reset longestprobe after some deletions, this should maintain stable performance for _getindex and _getindex_array
     if idx.longestprobe == prevlongestprobe &&
        idx.longestprobe > idx.initiallongestprobe &&
        idx.deletions >= length(idx) ÷ 2
@@ -54,24 +61,28 @@ function _setindex!(idx::Index{T, V}, elem::T, position::Unsigned) where {T, V}
     end
 end
 
-function _getindex(idx::Index{T}, elem::T) where {T}
+function _getindex(idx::Index{T, V}, elem::T) where {T, V}
     ilength = _length(idx)
     if ilength > 0x0
-        location = hash(elem) % ilength + 0x1
+        location::V = hash(elem) % ilength + 0x1
         @inbounds for probeposition ∈ 0x1:(idx.longestprobe)
             pos = idx.indices[location]
             if pos > 0x0 && isequal(idx.vals[pos], elem)
                 return location
             elseif pos == 0x0
-                return 0x0
+                return V(0x0)
             end
             location = location == ilength ? UInt(0x1) : location + 0x1
         end
     end
-    return 0x0
+    return V(0x0)
 end
 
 function _getindex_array(idx::Index{T, V}, elem::T) where {T, V}
+    if allunique(idx)
+        ret = _getindex(idx, elem)
+        return ret > 0x0 ? [ret] : V[]
+    end
     locations = Vector{V}()
     ilength = _length(idx)
     if ilength > 0x0
@@ -89,45 +100,68 @@ function _getindex_array(idx::Index{T, V}, elem::T) where {T, V}
     return locations
 end
 
-function _getindex_byposition(idx::Index{T}, i::Integer) where {T}
+function _getindex_byposition(idx::Index{T, V}, i::Integer) where {T, V}
     elem = idx.vals[i]
     ilength = _length(idx)
+    is_duplicate = 0x0
     if ilength > 0x0
-        location = hash(elem) % ilength + 0x1
+        location::V = hash(elem) % ilength + 0x1
         @inbounds for probeposition ∈ 0x1:(idx.longestprobe)
             pos = idx.indices[location]
-            if pos > 0x0 && pos == i
-                return location
+            if pos > 0x0
+                if is_duplicate < 0x2
+                    is_duplicate += isequal(elem, idx.vals[pos])
+                end
+                if pos == i
+                    return location, is_duplicate > 0x1
+                end
             elseif pos == 0x0
                 break
             end
-            location = location == ilength ? UInt64(0x1) : location + 0x1
+            location = location == ilength ? V(0x1) : location + 0x1
         end
     end
     error("Element not found. This should never happen.")
 end
 
-function _delete!(idx::Index, oldkeyindex::Integer)
+function _delete!(idx::Index, oldkeyindex::Integer, is_duplicate::Bool=false)
     lastidx = findnext(≤(0x1), idx.probepositions, oldkeyindex + 0x1)
+    has_duplicates = !allunique(idx)
     @inbounds if !isnothing(lastidx)
         lastidx -= 0x1
+
+        if !is_duplicate && has_duplicates
+            subvals = @view idx.vals[idx.indices[oldkeyindex:lastidx]]
+            is_duplicate = !isnothing(findnext(isequal(subvals[1]), subvals, 2))
+        end
+
         idx.indices[oldkeyindex:(lastidx - 0x1)] .= @view idx.indices[(oldkeyindex + 0x1):lastidx]
         idx.probepositions[oldkeyindex:(lastidx - 0x1)] .= @view(idx.probepositions[(oldkeyindex + 0x1):lastidx]) .- 0x1
         idx.indices[lastidx] = idx.probepositions[lastidx] = 0x0
     else
         if oldkeyindex < _length(idx)
+            if !is_duplicate && has_duplicates
+                subvals = @view idx.vals[idx.indices[oldkeyindex:end]]
+                is_duplicate = !isnothing(findnext(isequal(subvals[1]), subvals, 2))
+            end
+
             idx.indices[oldkeyindex:(end - 0x1)] .= @view idx.indices[(oldkeyindex + 0x1):end]
             idx.probepositions[oldkeyindex:(end - 0x1)] .= @view(idx.probepositions[(oldkeyindex + 0x1):end]) .- 0x1
         end
         if idx.probepositions[1] > 0x1
-            idx.indices[end] = idx.indices[1]
-            idx.probepositions[end] = idx.probepositions[1] - 0x1
-
             lastidx = findnext(≤(0x1), idx.probepositions, 2)
             if isnothing(lastidx)
                 lastidx = oldkeyindex
             end
             lastidx -= 0x1
+
+            if !is_duplicate && has_duplicates
+                subvals = @view idx.vals[idx.indices[1:lastidx]]
+                is_duplicate = !isnothing(findnext(isequal(subvals[1]), subvals, 2))
+            end
+
+            idx.indices[end] = idx.indices[1]
+            idx.probepositions[end] = idx.probepositions[1] - 0x1
             idx.indices[0x1:(lastidx - 0x1)] .= @view idx.indices[0x2:lastidx]
             idx.probepositions[0x1:(lastidx - 0x1)] .= @view(idx.probepositions[0x2:lastidx]) .- 0x1
             idx.indices[lastidx] = idx.probepositions[lastidx] = 0x0
@@ -136,6 +170,7 @@ function _delete!(idx::Index, oldkeyindex::Integer)
         end
     end
 
+    idx.duplicates -= is_duplicate
     idx.deletions += 0x1
 end
 
@@ -157,6 +192,7 @@ Base.getindex(idx::AbstractIndex{T, V}, elems::AbstractVector{T}, x::Union{Val{t
     isempty(elems) ? V[] : reduce(vcat, (getindex(idx, elem, x) for elem ∈ elems))
 Base.in(elem::T, idx::AbstractIndex{T}) where {T} = getindex(idx, elem, Val(false), Val(false)) != 0x0
 
+Base.allunique(idx::Index) = idx.duplicates == 0x0
 Base.getindex(idx::Index{T}, elem::T, ::Val{true}, ::Val{false}) where {T} =
     @inbounds idx.indices[_getindex_array(idx, elem)] # exceptions may be undesirable in high-performance scenarios
 function Base.getindex(idx::Index{T}, elem::T, ::Val{true}) where {T}
@@ -185,9 +221,9 @@ end
 
 @inline function Base.setindex!(idx::Index{T}, newval::T, i::Integer) where {T}
     @boundscheck checkbounds(idx.vals, i)
-    oldkeyindex = _getindex_byposition(idx, i)
+    oldkeyindex, is_duplicate = _getindex_byposition(idx, i)
     validx = idx.indices[oldkeyindex]
-    _delete!(idx, oldkeyindex)
+    _delete!(idx, oldkeyindex, is_duplicate)
     _setindex!(idx, newval, validx)
     return idx
 end
@@ -198,7 +234,7 @@ function Base.setindex!(idx::Index{T}, newval::T, oldval::T) where {T}
         throw(KeyError(oldval))
     end
     validx = idx.indices[oldkeyindex]
-    _delete!(idx, oldkeyindex)
+    _delete!(idx, oldkeyindex, false)
     _setindex!(idx, newval, validx)
     return idx
 end
@@ -209,7 +245,7 @@ Base.values(idx::Index) = idx.vals
 Base.convert(::Type{<:Index}, x::AbstractArray) = Index(x)
 Base.convert(::Type{<:Index}, x::Index) = x
 
-struct SubIndex{T, V, I} <: AbstractIndex{T, V}
+mutable struct SubIndex{T, V, I} <: AbstractIndex{T, V}
     parent::Index{T, V}
     indices::I
     revmapping::Union{Nothing, Index}
@@ -224,9 +260,9 @@ end
     @boundscheck checkbounds(idx, I)
     return SubIndex(idx, I, Index(V.(I)))
 end
-@inline function Base.view(idx::Index{T, V}, I::AbstractArray{Bool}) where {T, V}
+@inline function Base.view(idx::Index, I::AbstractArray{Bool})
     @boundscheck checkbounds(idx, I)
-    return SubIndex(idx, I, Index(V.(findall(I))))
+    return @inbounds view(idx, findall(I))
 end
 @inline function Base.view(idx::Index, I::Integer)
     @boundscheck checkbounds(idx, I)
@@ -242,9 +278,17 @@ Base.parent(si::SubIndex) = si.parent
 Base.parentindices(si::SubIndex) = si.indices
 Base.length(si::SubIndex) = length(parentindices(si))
 Base.length(si::SubIndex{T, V, Colon}) where {T, V} = length(parent(si))
-Base.length(si::SubIndex{T, V, I}) where {T, V, I <: AbstractArray{Bool}} = length(si.revmapping)
 Base.size(si::SubIndex) = (length(si),)
-Base.values(si::SubIndex) = parent(si)[parentindices(si)]
+Base.values(si::SubIndex) = @view parent(si)[parentindices(si)]
+
+Base.allunique(si::SubIndex{T, V, Colon}) where {T, V} = allunique(parent(si))
+# it is impossible to accurately keep track of duplicates for views: The parent object may be changed by another view or by itself
+# thus we really need to always recheck for duplicates in the view if the parent has any
+function Base.allunique(si::SubIndex)
+    return allunique(parent(si)) ? true :
+           length(parentindices(si)) - length(unique(view(parent(si).vals, parentindices(si)))) == 0x0
+end
+
 function Base.getindex(si::SubIndex{T}, elem::T, ::Val{true}, ::Val{false}) where {T}
     res = getindex(parent(si), elem, Val(true), Val(false))
     i = 0
@@ -260,15 +304,6 @@ function Base.getindex(si::SubIndex{T}, elem::T, ::Val{true}, ::Val{false}) wher
 end
 Base.getindex(si::SubIndex{T, V, Colon}, elem::T, ::Val{true}, ::Val{false}) where {T, V} =
     getindex(parent(si), elem, Val(true), Val(false))
-function Base.getindex(si::SubIndex{T, V, I}, elem::T, ::Val{true}, ::Val{false}) where {T, V, I <: AbstractArray{Bool}}
-    res = getindex(parent(si), elem, Val(true), Val(false))
-    res = res[parentindices(si)[res]]
-    @inbounds for (i, r) ∈ enumerate(res)
-        res[i] = si.revmapping[r, false, false]
-    end
-
-    return res
-end
 function Base.getindex(
     si::SubIndex{T, V, I},
     elem::T,
@@ -318,18 +353,6 @@ function Base.getindex(
     elem::T,
     ::Val{false},
     ::Val{false},
-) where {T, V, I <: AbstractArray{Bool}}
-    res = getindex(parent(si, elem, Val(false), Val(false)))
-    if res == 0x0 || res > 0x0 && !(@inbounds parentindices(si)[res])
-        return V(0x0)
-    end
-    return si.revmapping[res, false, false]
-end
-function Base.getindex(
-    si::SubIndex{T, V, I},
-    elem::T,
-    ::Val{false},
-    ::Val{false},
 ) where {T, V, I <: AbstractArray{<:Integer}}
     res = getindex(parent(si), elem, Val(false), Val(false))
     return res > 0x0 ? si.revmapping[res, false, false] : res
@@ -369,7 +392,7 @@ Base.@propagate_inbounds function Base.setindex!(si::SubIndex{T}, newval::T, i::
 end
 Base.@propagate_inbounds function Base.setindex!(si::SubIndex{T, V, Colon}, newval::T, i::Integer) where {T, V}
     @boundscheck checkbounds(si, i)
-    setindex!(parent(si), newval, i)
+    return setindex!(parent(si), newval, i)
 end
 Base.@propagate_inbounds function Base.setindex!(si::SubIndex{T}, newval::T, oldval::T) where {T}
     oldidx = parent(si)[oldval, true]
@@ -378,19 +401,6 @@ Base.@propagate_inbounds function Base.setindex!(si::SubIndex{T}, newval::T, old
         throw(KeyError(oldval))
     end
     parent(si)[oldidx[foldidx]] = newval
-    return si
-end
-Base.@propagate_inbounds function Base.setindex!(
-    si::SubIndex{T, V, I},
-    newval::T,
-    oldval::T,
-) where {T, V, I <: AbstractArray{Bool}}
-    oldidx = parent(si)[oldval, true]
-    oldidx = oldidx[parentindices(si)[oldix]]
-    if length(oldidx) == 0
-        throw(KeyError(oldval))
-    end
-    parent(si)[oldidx[1]] = newval
     return si
 end
 Base.@propagate_inbounds function Base.setindex!(

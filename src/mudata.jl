@@ -469,7 +469,7 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::UInt8)
         if mod != mod2
             mask = dups .> 0
             have_duplicates = any(mask)
-            if any(getproperty(mdata.mod[mod], namesattr)[mask] .∈ (getproperty(ad, namesattr),))
+            if any(view(getproperty(mdata.mod[mod], namesattr), mask) .∈ (getproperty(ad, namesattr),))
                 @warn "Duplicated $namesattr should not be present in different modalities due to the ambiguity that leads to."
                 break
             end
@@ -513,15 +513,12 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::UInt8)
         end
     end
     if have_duplicates && ncol(globaldata) > 1 + length(globalcols)
-        if length(globalcols) == 0
-            global_dupidx = index_duplicates(old_rownames)
-            if any(global_dupidx .> 0)
-                @warn "$namesattr is not unique, global $attr is present, and $mapattr is empty.\
-                        The update() is not well-defined, verify if global $attr map to the correct modality-specific $attr."
-                globaldata[!, dupidxcol] = global_dupidx
-                data_mod[!, dupidxcol] = index_duplicates(data_mod[!, idxcol])
-                push!(globalcols, dupidxcol)
-            end
+        if length(globalcols) == 0 && !allunique(old_rownames)
+            @warn "$namesattr is not unique, global $attr is present, and $mapattr is empty.\
+                    The update() is not well-defined, verify if global $attr map to the correct modality-specific $attr."
+            globaldata[!, dupidxcol] = index_duplicates(old_rownames)
+            data_mod[!, dupidxcol] = index_duplicates(data_mod[!, idxcol])
+            push!(globalcols, dupidxcol)
         end
     end
     transform!(data_mod, (mod * ":" * rowcol => x -> coalesce.(x, 0x0) for mod ∈ keys(mdata.mod))..., renamecols=false)
@@ -1105,23 +1102,25 @@ var_names_make_unique!(mdata::MuData, join='-') = attr_make_unique(mdata, :obs, 
 function attr_make_unique!(mdata::MuData, attr::Symbol, axis::UInt8, join='-')
     namesattr = Symbol(string(attr) * "_names")
 
-    for ad ∈ values(mdata.mod)
-        attr_make_unique!(ad, namesattr, join)
-    end
-    mods = collect(keys(mdata.mod))
-    have_duplicates = false
-    for i ∈ 1:(length(mods) - 1), j ∈ (i + 1):length(mods)
-        if length(getproperty(mdata.mod[mods[i]], namesattr) ∩ getproperty(mdata.mod[mods[j]], namesattr)) > 0
-            @warn "Modality names will be prepended to $(string(namesattr)) since there are identical $(string(namesattr)) in different modalities."
-            have_duplicates = true
-            break
+    if !allunique(getproperty(mdata, namesattr))
+        for ad ∈ values(mdata.mod)
+            attr_make_unique!(ad, namesattr, join)
         end
-    end
-    if have_duplicates
-        for (modname, mod) ∈ mdata.mod
-            getproperty(mod, namesattr) .= modname .* ":" .* getproperty(mod, namesattr)
+        mods = collect(keys(mdata.mod))
+        have_duplicates = false
+        for i ∈ 1:(length(mods) - 1), j ∈ (i + 1):length(mods)
+            if length(getproperty(mdata.mod[mods[i]], namesattr) ∩ getproperty(mdata.mod[mods[j]], namesattr)) > 0
+                @warn "Modality names will be prepended to $(string(namesattr)) since there are identical $(string(namesattr)) in different modalities."
+                have_duplicates = true
+                break
+            end
         end
-        update_attr!(mdata, attr, axis)
+        if have_duplicates
+            for (modname, mod) ∈ mdata.mod
+                getproperty(mod, namesattr) .= modname .* ":" .* getproperty(mod, namesattr)
+            end
+            update_attr!(mdata, attr, axis)
+        end
     end
     return mdata
 end
