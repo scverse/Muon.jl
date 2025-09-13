@@ -361,18 +361,15 @@ Base.setindex!(mdata::MuData, ad::AnnData, key::AbstractString) = setindex!(mdat
 Base.setindex!(mdata::MuData, ad::AnnData, key::Symbol) = setindex!(mdata.mod, ad, string(key))
 
 function Base.getindex(
-    mdata::MuData,
+    mdata::AbstractMuData,
     I::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
     J::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
 )
     @boundscheck checkbounds(mdata, I, J)
     i, j = convertidx(I, mdata.obs_names), convertidx(J, mdata.var_names)
-    newmu = MuData(
+    @inbounds newmu = MuData(
         mod=OrderedDict{String, AnnData}(
-            k => ad[
-                getadidx(i, vec(mdata.obsmap[k]), mdata.obs_names),
-                getadidx(j, vec(mdata.varmap[k]), mdata.var_names),
-            ] for (k, ad) ∈ mdata.mod
+            k => ad[getadidx(i, vec(mdata.obsmap[k])), getadidx(j, vec(mdata.varmap[k]))] for (k, ad) ∈ mdata.mod
         ),
         obs=isempty(mdata.obs) ? nothing : mdata.obs[i, :],
         obs_names=mdata.obs_names[i],
@@ -394,13 +391,9 @@ function Base.getindex(
     return newmu
 end
 
-getadidx(I::Colon, ref::AbstractVector{<:Unsigned}, idx::AbstractIndex{<:AbstractString}, reduce_memory=false) = I
-function getadidx(
-    I::Union{AbstractVector{<:Integer}, OrdinalRange},
-    ref::AbstractVector{<:Unsigned},
-    idx::AbstractIndex{<:AbstractString},
-    reduce_memory=false,
-)
+getadidx(I::Colon, ref::AbstractVector{<:Unsigned}, reduce_memory=false) = I
+getadidx(I::OrdinalRange, ref::AbstractVector{<:Unsigned}, reduce_memory=false) = filter(>(0x0), ref[I])
+function getadidx(I::AbstractVector{<:Integer}, ref::AbstractVector{<:Unsigned}, reduce_memory=false)
     J = filter(>(0x0), ref[I])
     if reduce_memory && length(J) > 0
         diff = J[end] - J[1]
@@ -414,8 +407,7 @@ function getadidx(
     end
     return J
 end
-getadidx(I::Number, ref::AbstractVector{<:Unsigned}, idx::Index{<:AbstractString}, reduce_memory=false) =
-    getadidx([I], ref, idx, reduce_memory)
+getadidx(I::Number, ref::AbstractVector{<:Unsigned}, reduce_memory=false) = getadidx([I], ref, reduce_memory)
 
 adjustmap!(map::AbstractVector{<:Unsigned}, I::Colon) = map
 function adjustmap!(map::AbstractVector{<:Unsigned}, I::Union{Integer, AbstractVector{<:Integer}, OrdinalRange})
@@ -999,77 +991,78 @@ push_var!(
 ) where {N, M} =
     _push_attr!(mdata, :var, 0x2, columns, mods, common=common, prefixed=prefixed, drop=drop, only_drop=only_drop)
 
-struct MuDataView{Ti, Tj} <: AbstractMuData
+mutable struct MuDataView{Ti, Tj} <: AbstractMuData
     parent::MuData
     I::Ti
     J::Tj
 
-    mod::FrozenDict{String, <:AnnDataView}
+    mod::LittleDict{String, <:AnnDataView}
     obs::SubDataFrame
     obs_names::SubIndex{<:AbstractString}
     obsm::StrAlignedMappingView{Tuple{1 => 1}}
     obsp::StrAlignedMappingView{Tuple{1 => 1, 2 => 1}}
-    obsmap::StrAlignedMappingView{Tuple{1 => 1}}
+    obsmap::StrAlignedMapping{Tuple{1 => 1}, MuDataView{Ti, Tj}, false}
 
     var::SubDataFrame
     var_names::SubIndex{<:AbstractString}
     varm::StrAlignedMappingView{Tuple{1 => 2}}
     varp::StrAlignedMappingView{Tuple{1 => 2, 2 => 2}}
-    varmap::StrAlignedMappingView{Tuple{1 => 2}}
+    varmap::StrAlignedMapping{Tuple{1 => 2}, MuDataView{Ti, Tj}, false}
 
     uns::Dict{<:AbstractString, <:Any}
-end
 
-function Base.view(
+    function MuDataView{Ti, Tj}(parent::MuData, I::Ti, J::Tj) where {Ti, Tj}
+        mv = new(
+            parent,
+            I,
+            J,
+            freeze(
+                OrderedDict(
+                    m => view(ad, getadidx(I, vec(parent.obsmap[m]), true), getadidx(J, vec(parent.varmap[m]), true)) for (m, ad) ∈ parent.mod
+                ),
+            ),
+        )
+
+        mv.obs = view(parent.obs, nrow(parent.obs) > 0 ? I : (:), :)
+        mv.obs_names = view(parent.obs_names, I)
+        mv.obsm = view(parent.obsm, I)
+        mv.obsp = view(parent.obsp, I, I)
+
+        mv.var = view(parent.var, nrow(parent.var) > 0 ? J : (:), :)
+        mv.var_names = view(parent.var_names, J)
+        mv.varm = view(parent.varm, J)
+        mv.varp = view(parent.varp, J, J)
+
+        mv.obsmap = StrAlignedMapping{Tuple{1 => 1}, false}(mv)
+        mv.varmap = StrAlignedMapping{Tuple{1 => 2}, false}(mv)
+        copy_subset(parent.obsmap, mv.obsmap, I, J),
+        copy_subset(parent.varmap, mv.varmap, I, J),
+        for mod ∈ keys(mv.mod)
+            adjustmap!(vec(mv.obsmap[mod]), I)
+            adjustmap!(vec(mv.varmap[mod]), J)
+        end
+        return mv
+    end
+end
+MuDataView(parent::MuData, I::Ti, J::Tj) where {Ti, Tj} = MuDataView{Ti, Tj}(parent, I, J)
+
+@inline function Base.view(
     mu::MuData,
-    I::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
-    J::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
+    I::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Integer, AbstractString},
+    J::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Integer, AbstractString},
 )
     @boundscheck checkbounds(mu, I, J)
     i, j = convertidx(I, mu.obs_names), convertidx(J, mu.var_names)
-    mod = Dict(
-        m => view(
-            ad,
-            getadidx(i, vec(mu.obsmap[m]), mu.obs_names, true),
-            getadidx(j, vec(mu.varmap[m]), mu.var_names, true),
-        ) for (m, ad) ∈ mu.mod
-    )
-    return MuDataView(
-        mu,
-        i,
-        j,
-        FrozenDict(mod),
-        view(mu.obs, nrow(mu.obs) > 0 ? i : (:), :),
-        view(mu.obs_names, i),
-        view(mu.obsm, i),
-        view(mu.obsp, i, i),
-        view(mu.obsmap, i),
-        view(mu.var, nrow(mu.var) > 0 ? j : (:), :),
-        view(mu.var_names, j),
-        view(mu.varm, j),
-        view(mu.varp, j, j),
-        view(mu.varmap, j),
-        mu.uns,
-    )
+    return MuDataView(mu, i, j)
 end
 function Base.view(
     mu::MuDataView,
-    I::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
-    J::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
+    I::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Integer, AbstractString},
+    J::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Integer, AbstractString},
 )
     @boundscheck checkbounds(mu, I, J)
     i, j = Base.reindex(parentindices(mu), (convertidx(I, mu.obs_names), convertidx(J, mu.var_names)))
-    return view(parent(mu), i, j)
-end
-
-function Base.getindex(
-    mu::MuDataView,
-    I::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
-    J::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Number, AbstractString},
-)
-    @boundscheck checkbounds(mu, I, J)
-    i, j = Base.reindex(parentindices(mu), (convertidx(I, mu.obs_names), convertidx(J, mu.var_names)))
-    return getindex(parent(mu), i, j)
+    return @inbounds view(parent(mu), i, j)
 end
 
 Base.parent(mu::MuData) = mu

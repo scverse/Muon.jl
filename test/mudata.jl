@@ -127,15 +127,18 @@ function test_row_slice(md, i1, n, d, j=:)
     ad1_names = filter(in(md["ad1"].obs_names), md.obs_names[i1])
     ad2_names = filter(in(md["ad2"].obs_names), md.obs_names[i1])
 
-    ad1_idx = filter(>(0x0), reshape(md.obsmap["ad1"], :)[i1])
-    ad2_idx = filter(>(0x0), reshape(md.obsmap["ad2"], :)[i1])
+    ad1_idx = filter(>(0x0), vec(md.obsmap["ad1"])[i1])
+    ad2_idx = filter(>(0x0), vec(md.obsmap["ad2"])[i1])
+    ad1, ad2 = md["ad1"][ad1_idx, j], md["ad2"][ad2_idx, j]
 
-    ad1, ad2 = parent(md["ad1"])[ad1_idx, j], parent(md["ad2"])[ad2_idx, j]
+    parent_ad1_idx = filter(>(0x0), vec(parent(md).obsmap["ad1"])[parentindices(md)[1][i1]])
+    parent_ad2_idx = filter(>(0x0), vec(parent(md).obsmap["ad2"])[parentindices(md)[1][i1]])
+    parent_ad1, parent_ad2 = parent(md)["ad1"][parent_ad1_idx, j], parent(md["ad2"])[parent_ad2_idx, j]
 
     @test md1["ad1"].X == md2["ad1"].X == md4["ad1"].X == ad1.X
     @test md1["ad2"].X == md2["ad2"].X == md4["ad2"].X == ad2.X
-    @test md1["ad1"].obs_names == md2["ad1"].obs_names == md4["ad1"].obs_names == ad1.obs_names
-    @test md1["ad2"].obs_names == md2["ad2"].obs_names == md4["ad2"].obs_names == ad2.obs_names
+    @test md1["ad1"].obs_names == md2["ad1"].obs_names == md4["ad1"].obs_names == ad1.obs_names == parent_ad1.obs_names
+    @test md1["ad2"].obs_names == md2["ad2"].obs_names == md4["ad2"].obs_names == ad2.obs_names == parent_ad2.obs_names
 end
 
 function test_md_slicing(md, n, d, j=:)
@@ -230,7 +233,7 @@ end
             if unique && axis == 0x2
                 md = (@test_nowarn MuData(mod=Dict("ad1" => ad1, "ad2" => ad2, "ad3" => ad3), axis=axis))
             else
-                md = with_logger(NullLogger()) do    # warning depends on the RNG, and differs between Julia versions
+                md = with_logger(NullLogger()) do # warning depends on the RNG, and differs between Julia versions
                     MuData(mod=Dict("ad1" => ad1, "ad2" => ad2, "ad3" => ad3), axis=axis)
                 end
             end

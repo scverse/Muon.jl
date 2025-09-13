@@ -68,17 +68,14 @@ function minimum_unsigned_type_for_n(n::Number)
     return mintype
 end
 
-@inline function convertidx(
-    idx::Union{OrdinalRange, Colon, AbstractVector{<:Integer}},
-    ref::AbstractIndex{<:AbstractString},
-)
+@inline function convertidx(idx::Union{OrdinalRange, Colon, AbstractVector{<:Integer}}, ref::AbstractIndex)
     return idx
 end
-@inline function convertidx(idx::Integer, ref::AbstractIndex{<:AbstractString})
+@inline function convertidx(idx::Integer, ref::AbstractIndex)
     return idx:idx
 end
-@inline convertidx(idx::Union{AbstractString, AbstractVector{<:AbstractString}}, ref::AbstractIndex{<:AbstractString}) =
-    ref[idx, true]
+@inline convertidx(idx::Union{AbstractString, AbstractVector{<:AbstractString}}, ref::AbstractIndex) = ref[idx, true]
+@inline convertidx(idx::AbstractVector{Bool}, ref::AbstractIndex) = findall(idx)
 
 Base.axes(A::Union{AbstractMuData, AbstractAnnData}) = map(n -> Base.OneTo(n), size(A))
 

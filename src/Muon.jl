@@ -13,7 +13,7 @@ using StructArrays
 using PooledArrays
 using FillArrays
 using DataStructures
-import CompressHashDisplace: FrozenDict
+using OrderedCollections
 using FileIO
 
 using Compat

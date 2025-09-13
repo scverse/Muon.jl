@@ -355,7 +355,7 @@ function Base.getindex(
 )
     @boundscheck checkbounds(adata, I, J)
     i, j = convertidx(I, adata.obs_names), convertidx(J, adata.var_names)
-    newad = AnnData(
+    @inbounds newad = AnnData(
         X=adata.X[i, j],
         obs=isempty(adata.obs) ? nothing : adata.obs[i, :],
         obs_names=adata.obs_names[i],
@@ -394,10 +394,14 @@ struct AnnDataView{Ti, Tj} <: AbstractAnnData
     uns::Dict{<:AbstractString, <:Any}
 end
 
-function Base.view(ad::AnnData, I, J)
+@inline function Base.view(
+    ad::AnnData,
+    I::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Integer, AbstractString},
+    J::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Integer, AbstractString},
+)
     @boundscheck checkbounds(ad, I, J)
     i, j = convertidx(I, ad.obs_names), convertidx(J, ad.var_names)
-    X = isbacked(ad) ? nothing : @view ad.X[i, j]
+    X = isbacked(ad) ? nothing : @inbounds view(ad.X, i, j)
 
     return AnnDataView(
         ad,
@@ -416,10 +420,14 @@ function Base.view(ad::AnnData, I, J)
         ad.uns,
     )
 end
-function Base.view(ad::AnnDataView, I, J)
+function Base.view(
+    ad::AnnDataView,
+    I::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Integer, AbstractString},
+    J::Union{OrdinalRange, Colon, AbstractVector{<:Integer}, AbstractVector{<:AbstractString}, Integer, AbstractString},
+)
     @boundscheck checkbounds(ad, I, J)
     i, j = Base.reindex(parentindices(ad), (convertidx(I, ad.obs_names), convertidx(J, ad.var_names)))
-    return view(parent(ad), i, j)
+    return @inbounds view(parent(ad), i, j)
 end
 
 function Base.getproperty(ad::AnnDataView, s::Symbol)

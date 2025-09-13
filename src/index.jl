@@ -270,7 +270,7 @@ end
 end
 @inline function Base.view(idx::SubIndex, I)
     @boundscheck checkbounds(idx, I)
-    return @inbounds view(parent(idx), Base.reindex((parentindices(idx),), (I,))[1])
+    return @inbounds view(parent(idx), Base.reindex((parentindices(idx),), (I,))...)
 end
 
 Base.copy(si::SubIndex) = Index(si)
@@ -373,46 +373,39 @@ function Base.getindex(si::SubIndex{T}, elem::T, ::Val{false}) where {T}
     end
     return res
 end
-Base.@propagate_inbounds function Base.getindex(si::SubIndex, i::Union{Integer, AbstractVector{<:Integer}})
+@inline function Base.getindex(si::SubIndex, i::Union{Integer, AbstractVector{<:Integer}})
     @boundscheck checkbounds(si, i)
-    return parent(si)[Base.reindex((parentindices(si),), (i,))[1]]
+    return @inbounds parent(si)[Base.reindex((parentindices(si),), (i,))...]
 end
-Base.@propagate_inbounds function Base.getindex(
-    si::SubIndex{T, V, Colon},
-    i::Union{Integer, AbstractVector{<:Integer}},
-) where {T, V}
+@inline function Base.getindex(si::SubIndex{T, V, Colon}, i::Union{Integer, AbstractVector{<:Integer}}) where {T, V}
     @boundscheck checkbounds(si, i)
-    return parent(si)[i]
+    return @inbounds parent(si)[i]
 end
 
-Base.@propagate_inbounds function Base.setindex!(si::SubIndex{T}, newval::T, i::Integer) where {T}
+@inline function Base.setindex!(si::SubIndex{T}, newval::T, i::Integer) where {T}
     @boundscheck checkbounds(si, i)
-    setindex!(parent(si), newval, Base.reindex((parentindices(si),), (i,))[1])
+    @inbounds setindex!(parent(si), newval, Base.reindex((parentindices(si),), (i,))...)
     return si
 end
-Base.@propagate_inbounds function Base.setindex!(si::SubIndex{T, V, Colon}, newval::T, i::Integer) where {T, V}
+@inline function Base.setindex!(si::SubIndex{T, V, Colon}, newval::T, i::Integer) where {T, V}
     @boundscheck checkbounds(si, i)
-    return setindex!(parent(si), newval, i)
+    return @inbounds setindex!(parent(si), newval, i)
 end
-Base.@propagate_inbounds function Base.setindex!(si::SubIndex{T}, newval::T, oldval::T) where {T}
+function Base.setindex!(si::SubIndex{T}, newval::T, oldval::T) where {T}
     oldidx = parent(si)[oldval, true]
     foldidx = findfirst(in(parentindices(si)), oldidx)
     if isnothing(foldidx)
         throw(KeyError(oldval))
     end
-    parent(si)[oldidx[foldidx]] = newval
+    @inbounds parent(si)[oldidx[foldidx]] = newval
     return si
 end
-Base.@propagate_inbounds function Base.setindex!(
-    si::SubIndex{T, V, I},
-    newval::T,
-    oldval::T,
-) where {T, V, I <: AbstractArray{<:Integer}}
+function Base.setindex!(si::SubIndex{T, V, I}, newval::T, oldval::T) where {T, V, I <: AbstractArray{<:Integer}}
     oldidx = parent(si)[oldval, true]
     foldidx = findfirst(in(si.revmapping), oldidx)
     if isnothing(foldidx)
         throw(KeyError(oldval))
     end
-    parent(si)[oldidx[foldidx]] = newval
+    @inbounds parent(si)[oldidx[foldidx]] = newval
     return si
 end
