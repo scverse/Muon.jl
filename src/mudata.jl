@@ -553,7 +553,7 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::UInt8)
                     chunk = DataFrame(chunk, names(v))
                     ellipsis = (:) # EllipsisNotation.jl doesn't work with DataFrames
                 end
-                attrm[k] = vcat(view(v, keep_index, ellipsis), chunk)
+                attrm[k] = vcat(view(v, old_index, ellipsis), chunk)
             end
         end
 
@@ -562,7 +562,7 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::UInt8)
             topright = Fill(missing, n_kept_rows, n_new_rows, size(v)[3:end]...)
             bottomleft = Fill(missing, n_new_rows, n_kept_rows, size(v)[3:end]...)
             bottomright = Fill(missing, n_new_rows, n_new_rows, size(v)[3:end]...)
-            attrp[k] = hvcat(2, view(v, keep_index, keep_index), topright, bottomleft, bottomright)
+            attrp[k] = hvcat(2, view(v, old_index, old_index), topright, bottomleft, bottomright)
         end
     end
     return mdata

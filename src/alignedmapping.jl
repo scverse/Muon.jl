@@ -1,25 +1,17 @@
 abstract type AbstractAlignedMapping{T <: Tuple, K, V} <: AbstractDict{K, V} end
 
-struct AlignedMapping{T <: Tuple, K, R, D} <: AbstractAlignedMapping{
-    T,
-    K,
-    Union{AbstractArray{<:Number}, AbstractArray{Union{Missing, T}} where T <: Number, D == true ? DataFrame : Union{}},
-}
+struct AlignedMapping{T <: Tuple, K, R, D, V} <: AbstractAlignedMapping{T, K, V}
     ref::R # any type as long as it supports size()
-    d::Dict{
-        K,
-        Union{
-            AbstractArray{<:Number},
-            AbstractArray{Union{Missing, T}} where T <: Number,
-            D == true ? DataFrame : Union{},
-        },
-    }
+    d::Dict{K, V}
 
     function AlignedMapping{T, K, D}(r, d::AbstractDict{K}) where {T <: Tuple, K, D}
+        @assert isa(D, Bool)
         for (k, v) ∈ d
             checkdim(T, v, r, k)
         end
-        return new{T, K, typeof(r), D}(r, d)
+
+        V = Union{AbstractArray{<:Number}, AbstractArray{Union{Missing, T}} where T <: Number, D ? DataFrame : Union{}}
+        return new{T, K, typeof(r), D, V}(r, d)
     end
 end
 
@@ -266,5 +258,5 @@ function Base.view(parentview::AlignedMappingView{T}, indices...) where {T <: Tu
     return AlignedMappingView(parent(parentview), Base.reindex(parentindices(parentview), indices))
 end
 
-const StrAlignedMapping{T <: Tuple, R, D} = AlignedMapping{T, String, R, D}
+const StrAlignedMapping{T <: Tuple, R, D, V} = AlignedMapping{T, String, R, D, V}
 const StrAlignedMappingView{T <: Tuple} = AlignedMappingView{T, String}
