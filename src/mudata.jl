@@ -499,7 +499,7 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::UInt8)
     for (mod, ad) ∈ mdata.mod
         colname = mod * ":" * rowcol
         if haskey(map, mod)
-            modmap = map[mod]
+            modmap = vec(map[mod])
             modmask = modmap .> 0x0
             # only use unchanged modalities for ordering
             if sum(modmask) == size(ad, axis) && getproperty(ad, namesattr)[modmap[modmask]] == old_rownames[modmask]
