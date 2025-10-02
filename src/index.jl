@@ -189,7 +189,7 @@ Base.getindex(idx::AbstractIndex{T}, elem::T, x::Bool, y::Bool) where {T} = geti
 Base.getindex(idx::AbstractIndex{T}, elems::AbstractVector{T}) where {T} = getindex(idx, elems, Val(false))
 Base.getindex(idx::AbstractIndex{T}, elems::AbstractVector{T}, x::Bool) where {T} = getindex(idx, elems, Val(x))
 Base.getindex(idx::AbstractIndex{T, V}, elems::AbstractVector{T}, x::Union{Val{true}, Val{false}}) where {T, V} =
-    isempty(elems) ? V[] : reduce(vcat, (getindex(idx, elem, x) for elem ∈ elems))
+    isempty(elems) ? V[] : vcat((getindex(idx, elem, x) for elem ∈ elems)...)
 Base.in(elem::T, idx::AbstractIndex{T}) where {T} = getindex(idx, elem, Val(false), Val(false)) != 0x0
 
 Base.allunique(idx::Index) = idx.duplicates == 0x0

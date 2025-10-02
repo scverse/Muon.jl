@@ -454,28 +454,22 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::UInt8)
     mapattr = Symbol("$(attr)map")
 
     map = getproperty(mdata, mapattr)
+    old_rownames = getproperty(mdata, namesattr)
 
     dupidx = Dict(mod => index_duplicates(getproperty(ad, namesattr)) for (mod, ad) ∈ mdata.mod)
-    have_duplicates = false
+    have_duplicates = !allunique(old_rownames)
     for (mod, dups) ∈ dupidx, (mod2, ad) ∈ mdata.mod
         if mod != mod2
             mask = dups .> 0
-            have_duplicates = any(mask)
+            have_duplicates || (have_duplicates = any(mask))
             if any(view(getproperty(mdata.mod[mod], namesattr), mask) .∈ (getproperty(ad, namesattr),))
                 @warn "Duplicated $namesattr should not be present in different modalities due to the ambiguity that leads to."
                 break
             end
         end
     end
-    if have_duplicates
-        @warn "$namesattr are not unique. To make them unique, call $(namesattr)_make_unique!"
-        if mdata.axis == 0
-            @warn "Behavior is not defined with axis=0, $namesattr need to be made unique first."
-        end
-    end
 
-    old_rownames = getproperty(mdata, namesattr)
-    idxcol, dupidxcol, rowcol = find_unique_colnames(mdata, attr, 0x3)
+    idxcol, dupidxcol, rowcol, sourcecol = find_unique_colnames(mdata, attr, 0x4)
     globaldata = _verify_global_df(mdata, attr, axis)
     globaldata = insertcols!(globaldata, idxcol => old_rownames)
 
@@ -494,29 +488,51 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::UInt8)
             axis == mdata.axis || mdata.axis == 0x0 ?
             outerjoin(dfs..., on=have_duplicates ? [idxcol, dupidxcol] : idxcol, order=:left, makeunique=false) :
             vcat(dfs..., cols=:union)
+        transform!(
+            data_mod,
+            (mod * ":" * rowcol => x -> coalesce.(x, 0x0) for mod ∈ keys(mdata.mod))...,
+            renamecols=false,
+        )
     end
     have_duplicates && select!(data_mod, Not(dupidxcol))
     globalcols = [idxcol]
     for (mod, ad) ∈ mdata.mod
-        if haskey(map, mod) && sum(map[mod] .> 0) == length(getproperty(ad, namesattr))
-            colname = mod * ":" * rowcol
-            globaldata[!, colname] = vec(map[mod])
-            push!(globalcols, colname)
+        colname = mod * ":" * rowcol
+        if haskey(map, mod)
+            modmap = map[mod]
+            modmask = modmap .> 0x0
+            # only use unchanged modalities for ordering
+            if sum(modmask) == size(ad, axis) && getproperty(ad, namesattr)[modmap[modmask]] == old_rownames[modmask]
+                globaldata[!, colname] = vec(map[mod])
+                push!(globalcols, colname)
+            end
         end
     end
     if have_duplicates && ncol(globaldata) > 1 + length(globalcols)
         if length(globalcols) == 0 && !allunique(old_rownames)
-            @warn "$namesattr is not unique, global $attr is present, and $mapattr is empty.\
+            @warn "$namesattr is not unique, global $attr is present, and $mapattr is empty. \
                     The update() is not well-defined, verify if global $attr map to the correct modality-specific $attr."
             globaldata[!, dupidxcol] = index_duplicates(old_rownames)
             data_mod[!, dupidxcol] = index_duplicates(data_mod[!, idxcol])
             push!(globalcols, dupidxcol)
         end
     end
-    transform!(data_mod, (mod * ":" * rowcol => x -> coalesce.(x, 0x0) for mod ∈ keys(mdata.mod))..., renamecols=false)
-    data_mod = leftjoin(data_mod, globaldata, on=globalcols, order=:right) # right order to keep the old ordering as much as possible
+    data_mod = outerjoin(data_mod, globaldata, on=globalcols, order=:right, source=sourcecol) # right order to keep the old ordering as much as possible
+
+    deleted_rows = data_mod[!, sourcecol] .== "right_only"
+    kept_rows = data_mod[!, sourcecol] .== "both"
+    new_rows = (data_mod[!, sourcecol] .== "left_only")
+    data_mod = data_mod[.~deleted_rows, :]
 
     rownames = Index(data_mod[!, idxcol])
+
+    if !allunique(rownames)
+        @warn "$namesattr are not unique. To make them unique, call $(namesattr)_make_unique!"
+        if mdata.axis == 0x0
+            @warn "Behavior is not defined with axis=0, $namesattr need to be made unique first."
+        end
+    end
+
     setproperty!(mdata, namesattr, rownames)
     empty!(map)
     attrm = getproperty(mdata, mattr)
@@ -528,33 +544,64 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::UInt8)
         attrm[mod] = cmap .> 0
         select!(data_mod, Not(colname))
     end
-    select!(data_mod, names(data_mod) .∉ ((idxcol, dupidxcol),))
+    select!(data_mod, names(data_mod) .∉ ((idxcol, dupidxcol, sourcecol),))
     setproperty!(mdata, attr, disallowmissing!(data_mod, error=false))
 
-    new_index = rownames .∈ (old_rownames,)
-    old_index = old_rownames .∈ (rownames,)
-    n_kept_rows = sum(new_index)
-    n_new_rows = length(rownames) - n_kept_rows
+    n_kept_rows = sum(kept_rows)
+    n_new_rows = sum(new_rows)
+    n_deleted_rows = sum(deleted_rows)
+
+    old_kept_rows = kept_rows[.~new_rows]
+
     # kept rows have the same ordering as before => no need to reorder anything
-    if n_kept_rows != length(old_rownames)
+    if length(rownames) != length(old_rownames) || n_kept_rows != length(old_rownames)
+        if !(
+            n_new_rows == 0 # filtered or reordered
+            ||
+            n_kept_rows == length(old_rownames) # new rows only
+            ||
+            length(rownames) == length(old_rownames) # renamed (since n_new_rows > 0 and n_kept_rows < length(old_rownames))
+            ||
+            (axis == 0x3 - mdata.axis && length(rownames) > length(old_rownames)) # new modality added and concatenated
+        )
+            throw(
+                InvalidStateException(
+                    "$namesattr seem to have been renamed and filtered at the same time. \
+                     There is no way to restore the order. The MuData object has to be re-created \
+                     from these modalities:\n  mdata1 = MuData(mdata.mod)",
+                    :renamed_and_filtered,
+                ),
+            )
+        end
+
         @inbounds for (k, v) ∈ attrm
             if !haskey(mdata.mod, k)
-                ellipsis::Union{Colon, Ellipsis} = ..
-                chunk::Union{Fill{Missing, ndims(v)}, DataFrame} = Fill(missing, n_new_rows, size(v)[2:end]...)
-                if isa(v, DataFrame)
-                    chunk = DataFrame(chunk, names(v))
-                    ellipsis = (:) # EllipsisNotation.jl doesn't work with DataFrames
+                ellipsis::Union{Colon, EllipsisNotation.Ellipsis} = ..
+                if n_new_rows > 0
+                    chunk::Union{Fill{Missing, ndims(v)}, DataFrame} = Fill(missing, n_new_rows, size(v)[2:end]...)
+                    if isa(v, DataFrame)
+                        chunk = DataFrame(chunk, names(v))
+                        ellipsis = (:) # EllipsisNotation.jl doesn't work with DataFrames
+                    end
+                    @views attrm[k] = vcat(v[old_kept_rows, ellipsis], chunk)
+                elseif n_deleted_rows > 0
+                    @views attrm[k] = v[old_kept_rows, ellipsis]
                 end
-                attrm[k] = vcat(view(v, old_index, ellipsis), chunk)
             end
         end
 
         attrp = getproperty(mdata, Symbol("$(attr)p"))
-        @inbounds for (k, v) ∈ attrp
-            topright = Fill(missing, n_kept_rows, n_new_rows, size(v)[3:end]...)
-            bottomleft = Fill(missing, n_new_rows, n_kept_rows, size(v)[3:end]...)
-            bottomright = Fill(missing, n_new_rows, n_new_rows, size(v)[3:end]...)
-            attrp[k] = hvcat(2, view(v, old_index, old_index), topright, bottomleft, bottomright)
+        if n_new_rows > 0
+            @inbounds for (k, v) ∈ attrp
+                topright = Fill(missing, n_kept_rows, n_new_rows, size(v)[3:end]...)
+                bottomleft = Fill(missing, n_new_rows, n_kept_rows, size(v)[3:end]...)
+                bottomright = Fill(missing, n_new_rows, n_new_rows, size(v)[3:end]...)
+                @views attrp[k] = hvcat(2, v[old_kept_rows, old_kept_rows], topright, bottomleft, bottomright)
+            end
+        elseif n_deleted_rows > 0
+            @inbounds for (k, v) ∈ attrp
+                attrp[k] = v[kept_rows, kept_rows]
+            end
         end
     end
     return mdata
