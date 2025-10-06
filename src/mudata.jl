@@ -722,21 +722,24 @@ function _push_attr!(
     axis::UInt8,
     columns::Union{AbstractVector{<:AbstractString}, NTuple{N, <:AbstractString}, AbstractString, Nothing}=nothing,
     mods::Union{AbstractVector{<:AbstractString}, NTuple{M, <:AbstractString}, AbstractString, Nothing}=nothing;
-    common::Bool=true,
-    prefixed::Bool=true,
+    common::Union{Bool, Nothing}=nothing,
+    prefixed::Union{Bool, Nothing}=nothing,
     drop::Bool=false,
     only_drop::Bool=false,
 ) where {N, M}
     args = Base.@locals
     if !isnothing(columns)
         for arg ∈ (:common, :prefixed)
-            if args[arg]
+            if !isnothing(args[arg])
                 @warn "$arg=true, but columns given. $arg will be ignored."
             end
         end
         if isa(columns, AbstractString)
             columns = (columns,)
         end
+    else
+        isnothing(common) && (common = true)
+        isnothing(prefixed) && (prefixed = true)
     end
     if !isnothing(mods)
         if isa(mods, AbstractString)
@@ -995,8 +998,8 @@ push_obs!(
     mdata::MuData;
     columns::Union{AbstractVector{<:AbstractString}, NTuple{N, <:AbstractString}, AbstractString, Nothing}=nothing,
     mods::Union{AbstractVector{<:AbstractString}, NTuple{M, <:AbstractString}, AbstractString, Nothing}=nothing,
-    common::Bool=true,
-    prefixed::Bool=true,
+    common::Union{Bool, Nothing}=nothing,
+    prefixed::Union{Bool, Nothing}=nothing,
     drop::Bool=false,
     only_drop::Bool=false,
 ) where {N, M} =
@@ -1031,8 +1034,8 @@ push_var!(
     mdata::MuData;
     columns::Union{AbstractVector{<:AbstractString}, NTuple{N, <:AbstractString}, AbstractString, Nothing}=nothing,
     mods::Union{AbstractVector{<:AbstractString}, NTuple{M, <:AbstractString}, AbstractString, Nothing}=nothing,
-    common::Bool=true,
-    prefixed::Bool=true,
+    common::Union{Bool, Nothing}=nothing,
+    prefixed::Union{Bool, Nothing}=nothing,
     drop::Bool=false,
     only_drop::Bool=false,
 ) where {N, M} =
