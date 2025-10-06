@@ -614,17 +614,32 @@ function _pull_attr!(
     axis::UInt8,
     columns::Union{AbstractVector{<:AbstractString}, NTuple{N, <:AbstractString}, AbstractString, Nothing}=nothing,
     mods::Union{AbstractVector{<:AbstractString}, NTuple{M, <:AbstractString}, AbstractString, Nothing}=nothing;
-    common::Bool=true,
+    common::Union{Bool, Nothing}=nothing,
     join_common::Bool,
-    nonunique::Bool=false,
+    nonunique::Union{Bool, Nothing}=nothing,
     join_nonunique::Bool=false,
-    unique::Bool=true,
+    unique::Union{Bool, Nothing}=nothing,
     prefix_unique::Bool=true,
     drop::Bool=false,
     only_drop::Bool=false,
 ) where {N, M}
-    if !isnothing(columns) && isa(columns, AbstractString)
-        columns = (columns,)
+    args = Base.@locals
+    if !isnothing(columns)
+        for arg ∈ (:common, :nonunique, :unique)
+            if !isnothing(args[arg])
+                @warn "Both columns and $arg given. Columns takes precedence, $arg will be ignored."
+            end
+        end
+        common = true
+        nonunique = true
+        unique = true
+        if isa(columns, AbstractString)
+            columns = (columns,)
+        end
+    else
+        isnothing(common) && (common = true)
+        isnothing(nonunique) && (nonunique = true)
+        isnothing(unique) && (unique = true)
     end
     if (axis == mdata.axis || mdata.axis == 0) && (join_common || join_nonunique)
         throw(ArgumentError("Cannot join columns with the same name for shared $(attr)_names"))
@@ -851,11 +866,11 @@ end
         mdata::MuData;
         columns::Union{AbstractVector{<:AbstractString}, NTuple{N, <:AbstractString}, AbstractString, Nothing}=nothing,
         mods::Union{AbstractVector{<:AbstractString}, NTuple{M, <:AbstractString}, AbstractString, Nothing}=nothing,
-        common::Bool=true,
+        common::Union{Bool, Nothing}=nothing,
         join_common::Union{Bool, Nothing}=nothing,
-        nonunique::Bool=true,
+        nonunique::Union{Bool, Nothing}=nothing,
         join_nonunique::Bool=false,
-        unique::Bool=true,
+        unique::Union{Bool, Nothing}=nothing,
         prefix_unique::Bool=true,
         drop::Bool=false,
         only_drop::Bool=false,
@@ -866,14 +881,16 @@ overwriting or updating existing columns.
 
 # Arguments
 - `mdata`: The [`MuData`](@ref) object.
-- `columns`: List of columns to pull from the modalities. Pulls everything by default.
-- `mods`: List of modalities to pull from. Pull from all modalities by default.
-- `common`: Whether to pull common columns. Common columns exist in all modalities.
-- `join_common`: Whether to join common columns. Joined columns do not have a modality prefix. Defaults to `true` if `mdata.axis == 0x2`
-  (shared `.var`), `false` otherwise.
-- `nonunique`: Whether to pull nonunique columns. Non-unique columns exist in at least two, but not all modalities.
+- `columns`: Columns to pull from the modalities. Pulls everything by default.
+- `mods`: Modalities to pull from. Pull from all modalities by default.
+- `common`: Whether to pull common columns. Common columns exist in all modalities. Cannot be used together with `columns`. Defaults to `true`.
+- `join_common`: Whether to join common columns. Joined columns do not have a modality prefix. Defaults to `true` if `mdata.axis == 0x1`
+  (shared `.obs`), `false` otherwise.
+- `nonunique`: Whether to pull nonunique columns. Non-unique columns exist in at least two, but not all modalities. Cannot be used together
+  with `columns`. Defaults to `true`.
 - `join_nonunique`: Whether to join non-unique columns. Joined columns do not have a modality prefix.
-- `unique`: Whether to pull unique columns. Unique columns exist in exactly one modality.
+- `unique`: Whether to pull unique columns. Unique columns exist in exactly one modality. Cannot be used together with `columns`. Defaults
+  to `true`.
 - `prefix_unique`: Whether to prefix unique columns with the modality name.
 - `drop`: Whether to delete columns from the modalities after pulling.
 - `only_drop`: Whether to only delete the columns from the modalities, but not actually pull them. Implies `drop=true`.
@@ -884,11 +901,11 @@ pull_obs!(
     mdata::MuData;
     columns::Union{AbstractVector{<:AbstractString}, NTuple{N, <:AbstractString}, AbstractString, Nothing}=nothing,
     mods::Union{AbstractVector{<:AbstractString}, NTuple{M, <:AbstractString}, AbstractString, Nothing}=nothing,
-    common::Bool=true,
+    common::Union{Bool, Nothing}=nothing,
     join_common::Union{Bool, Nothing}=nothing,
-    nonunique::Bool=true,
+    nonunique::Union{Bool, Nothing}=nothing,
     join_nonunique::Bool=false,
-    unique::Bool=true,
+    unique::Union{Bool, Nothing}=nothing,
     prefix_unique::Bool=true,
     drop::Bool=false,
     only_drop::Bool=false,
@@ -912,11 +929,11 @@ pull_obs!(
         mdata::MuData;
         columns::Union{AbstractVector{<:AbstractString}, NTuple{N, <:AbstractString}, AbstractString, Nothing}=nothing,
         mods::Union{AbstractVector{<:AbstractString}, NTuple{M, <:AbstractString}, AbstractString, Nothing}=nothing,
-        common::Bool=true,
+        common::Union{Bool, Nothing}=nothing,
         join_common::Union{Bool, Nothing}=nothing,
-        nonunique::Bool=true,
+        nonunique::Union{Bool, Nothing}=nothing,
         join_nonunique::Bool=false,
-        unique::Bool=true,
+        unique::Union{Bool, Nothing}=nothing,
         prefix_unique::Bool=true,
         drop::Bool=false,
         only_drop::Bool=false,
@@ -929,12 +946,14 @@ overwriting or updating existing columns.
 - `mdata`: The [`MuData`](@ref) object.
 - `columns`: Columns to pull from the modalities. Pulls everything by default.
 - `mods`: Modalities to pull from. Pull from all modalities by default.
-- `common`: Whether to pull common columns. Common columns exist in all modalities.
+- `common`: Whether to pull common columns. Common columns exist in all modalities. Cannot be used together with `columns`. Defaults to `true`.
 - `join_common`: Whether to join common columns. Joined columns do not have a modality prefix. Defaults to `true` if `mdata.axis == 0x1`
   (shared `.obs`), `false` otherwise.
-- `nonunique`: Whether to pull nonunique columns. Non-unique columns exist in at least two, but not all modalities.
+- `nonunique`: Whether to pull nonunique columns. Non-unique columns exist in at least two, but not all modalities. Cannot be used together
+  with `columns`. Defaults to `true`.
 - `join_nonunique`: Whether to join non-unique columns. Joined columns do not have a modality prefix.
-- `unique`: Whether to pull unique columns. Unique columns exist in exactly one modality.
+- `unique`: Whether to pull unique columns. Unique columns exist in exactly one modality. Cannot be used together with `columns`. Defaults
+  to `true`.
 - `prefix_unique`: Whether to prefix unique columns with the modality name.
 - `drop`: Whether to delete columns from the modalities after pulling.
 - `only_drop`: Whether to only delete the columns from the modalities, but not actually pull them. Implies `drop=true`.
@@ -945,11 +964,11 @@ pull_var!(
     mdata::MuData;
     columns::Union{AbstractVector{<:AbstractString}, NTuple{N, <:AbstractString}, AbstractString, Nothing}=nothing,
     mods::Union{AbstractVector{<:AbstractString}, NTuple{M, <:AbstractString}, AbstractString, Nothing}=nothing,
-    common::Bool=true,
+    common::Union{Bool, Nothing}=nothing,
     join_common::Union{Bool, Nothing}=nothing,
-    nonunique::Bool=true,
+    nonunique::Union{Bool, Nothing}=nothing,
     join_nonunique::Bool=false,
-    unique::Bool=true,
+    unique::Union{Bool, Nothing}=nothing,
     prefix_unique::Bool=true,
     drop::Bool=false,
     only_drop::Bool=false,
@@ -974,8 +993,8 @@ pull_var!(
         mdata::MuData;
         columns::Union{AbstractVector{<:AbstractString}, NTuple{N, <:AbstractString}, AbstractString, Nothing}=nothing,
         mods::Union{AbstractVector{<:AbstractString}, NTuple{M, <:AbstractString}, AbstractString, Nothing}=nothing,
-        common::Bool=true,
-        prefixed::Bool=true,
+        common::Union{Bool, Nothing}=nothing,
+        prefixed::Union{Bool, Nothing}=nothing,
         drop::Bool=false,
         only_drop::Bool=false,
     ) where {N, M}
@@ -987,8 +1006,9 @@ Copy metadata from `mdata.obs` to the `.obs` of the individual modalities, overw
 - `columns`: Columns to push. Pushes everything by default.
 - `mods`: Modalities to push to. Pushes to all modalities by default.
 - `common`: Whether to push common columns. Common columns do not have modality prefixes. Cannot be used together with `columns`.
+  Defaults to `true`.
 - `prefixed`: Whether to push columns with a modality prefix. Only push to the respective modalities. Cannot be used together
-  with `columns`.
+  with `columns`. Defaults to `true`.
 - `drop`: Whether to delete columns from `mdata.obs` after pushing.
 - `only_drop`: Whether to only delete the columns from `mdata.obs`, but not actually push them. Implies `drop=true`.
 
@@ -1010,8 +1030,8 @@ push_obs!(
         mdata::MuData;
         columns::Union{AbstractVector{<:AbstractString}, NTuple{N, <:AbstractString}, AbstractString, Nothing}=nothing,
         mods::Union{AbstractVector{<:AbstractString}, NTuple{M, <:AbstractString}, AbstractString, Nothing}=nothing,
-        common::Bool=true,
-        prefixed::Bool=true,
+        common::Union{Bool, Nothing}=nothing,
+        prefixed::Union{Bool, Nothing}=nothing,
         drop::Bool=false,
         only_drop::Bool=false,
     ) where {N, M}
@@ -1023,8 +1043,9 @@ Copy metadata from `mdata.var` to the `.var` of the individual modalities, overw
 - `columns`: Columns to push. Pushes everything by default.
 - `mods`: Modalities to push to. Pushes to all modalities by default.
 - `common`: Whether to push common columns. Common columns do not have modality prefixes. Cannot be used together with `columns`.
+  Defaults to `true`.
 - `prefixed`: Whether to push columns with a modality prefix. Only push to the respective modalities. Cannot be used together
-  with `columns`.
+  with `columns`. Defaults to `true`.
 - `drop`: Whether to delete columns from `mdata.obs` after pushing.
 - `only_drop`: Whether to only delete the columns from `mdata.obs`, but not actually push them. Implies `drop=true`.
 
