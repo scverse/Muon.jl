@@ -699,10 +699,7 @@ function _pull_attr!(
                 select!(getproperty(mod, attr), Not(modcols))
             end
             if !only_drop && length(modcols) > 0
-                moddf = select(getproperty(ad, attr), map(x -> x.name, modcols), copycols=false)[
-                    sortperm(view(modmap, mask)),
-                    :,
-                ]
+                @views moddf = select(getproperty(ad, attr), map(x -> x.name, modcols), copycols=false)[modmap[mask], :]
                 rename!(
                     moddf,
                     [

@@ -437,7 +437,7 @@ end
             if unique && axis == 0x2
                 md = (@test_nowarn MuData(mod=Dict("ad1" => ad1, "ad2" => ad2, "ad3" => ad3), axis=axis))
             else
-                md = with_logger(NullLogger()) do   # warning depends on the RNG, and differs between Julia versions
+                md = with_logger(NullLogger()) do # warning depends on the RNG, and differs between Julia versions
                     MuData(mod=Dict("ad1" => ad1, "ad2" => ad2, "ad3" => ad3), axis=axis)
                 end
             end
@@ -486,7 +486,8 @@ end
             end
             @testset "pull_$oattr" begin
                 pull_oattr!(md)
-                @test sort(names(getproperty(md, oattr))) == [
+                odf = getproperty(md, oattr)
+                @test sort(names(odf)) == [
                     "ad1:common_col",
                     "ad1:unique_col",
                     "ad2:common_col",
@@ -494,6 +495,11 @@ end
                     "ad3:common_col",
                     "ad3:nonunique_col",
                 ]
+
+                common_cols = [odf[!, "$mod:common_col"] for mod ∈ keys(md.mod)]
+                mask = mapreduce(x -> .!ismissing.(x), .&, common_cols)
+                common_cols = map(col -> getindex.(col, range.(5, lastindex.(col))), getindex.(common_cols, (mask,)))
+                @test allequal(common_cols)
 
                 setproperty!(md, oattr, DataFrame())
                 @test_throws ArgumentError pull_oattr!(md, join_common=true)
