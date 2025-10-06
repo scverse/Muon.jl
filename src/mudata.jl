@@ -627,7 +627,7 @@ function _pull_attr!(
     if !isnothing(columns)
         for arg ∈ (:common, :nonunique, :unique)
             if !isnothing(args[arg])
-                @warn "Both columns and $arg given. Columns takes precedence, $arg will be ignored."
+                @warn "Both columns and $arg given. Columns take precedence, $arg will be ignored."
             end
         end
         common = true
@@ -746,7 +746,7 @@ function _push_attr!(
     if !isnothing(columns)
         for arg ∈ (:common, :prefixed)
             if !isnothing(args[arg])
-                @warn "$arg=true, but columns given. $arg will be ignored."
+                @warn "Both columns and $arg given. Columns take precedence, $arg will be ignored."
             end
         end
         if isa(columns, AbstractString)
