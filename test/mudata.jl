@@ -424,12 +424,14 @@ end
     for unique ∈ (true, false), subset ∈ (true, false), axis ∈ (0x1, 0x2)
         attrname = axis == 0x1 ? "var" : "obs"
         attr = Symbol(attrname)
+        attrmap = Symbol("$(attrname)map")
         pull_attr! = getproperty(Main, Symbol("pull_$(attr)!"))
         push_attr! = getproperty(Main, Symbol("push_$(attr)!"))
 
         oaxis = 0x3 - axis
         oattrname = axis == 0x1 ? "obs" : "var"
         oattr = Symbol(oattrname)
+        oattrmap = Symbol("$(oattrname)map")
         pull_oattr! = getproperty(Main, Symbol("pull_$(oattr)!"))
         push_oattr! = getproperty(Main, Symbol("push_$(oattr)!"))
         @testset "unique=$unique, subset=$subset, attr=$attr" begin
@@ -448,7 +450,7 @@ end
                       ["ad1:unique_col", "ad2:nonunique_col", "ad3:nonunique_col", "common_col"]
 
                 for (mod, ad) ∈ md.mod
-                    map = vec(getproperty(md, Symbol("$(attr)map"))[mod])
+                    map = vec(getproperty(md, attrmap)[mod])
                     mask = map .> 0
                     @test all(startswith.(getproperty(md, attr)[mask, :common_col], mod))
                     @test getproperty(md, attr)[mask, :common_col] == getproperty(ad, attr)[map[mask], :common_col]
@@ -508,28 +510,44 @@ end
                 @test_throws ArgumentError pull_oattr!(md, join_nonunique=true)
             end
             @testset "push_$attr" begin
-                getproperty(md, attr)[:, :pushed] = fill(true, size(md, oaxis))
-                getproperty(md, attr)[:, "ad2:ad2_pushed"] .= true
+                getproperty(md, attr)[:, :pushed] = rand(Int, size(md, oaxis))
+                getproperty(md, attr)[:, "ad3:ad3_pushed"] = rand(Int, size(md, oaxis))
                 push_attr!(md)
-                for ad ∈ values(md.mod)
+                for (mod, ad) ∈ md.mod
                     @test columnindex(getproperty(ad, attr), :pushed) > 0
+
+                    map = vec(getproperty(md, attrmap)[mod])
+                    mask = map .> 0
+                    @test getproperty(md, attr)[!, :pushed][mask] == getproperty(ad, attr)[!, :pushed][map[mask]]
                 end
-                @test columnindex(getproperty(ad1, attr), :ad2_pushed) == 0
-                @test columnindex(getproperty(ad2, attr), :ad2_pushed) > 0
-                @test columnindex(getproperty(ad3, attr), :ad2_pushed) == 0
-                @test all(getproperty(ad2, attr)[!, :ad2_pushed])
+                @test columnindex(getproperty(ad1, attr), :ad3_pushed) == 0
+                @test columnindex(getproperty(ad2, attr), :ad3_pushed) == 0
+                @test columnindex(getproperty(ad3, attr), :ad3_pushed) > 0
+
+                map = vec(getproperty(md, attrmap)["ad3"])
+                mask = map .> 0
+                @test getproperty(md, attr)[!, "ad3:ad3_pushed"][mask] ==
+                      getproperty(ad3, attr)[!, :ad3_pushed][map[mask]]
             end
             @testset "push_$oattr" begin
-                getproperty(md, oattr)[:, :pushed] = fill(true, size(md, axis))
-                getproperty(md, oattr)[:, "ad2:ad2_pushed"] .= true
+                getproperty(md, oattr)[:, :pushed] = rand(Int, size(md, axis))
+                getproperty(md, oattr)[:, "ad3:ad3_pushed"] .= rand(Int, size(md, axis))
                 push_oattr!(md)
-                for ad ∈ values(md.mod)
+                for (mod, ad) ∈ md.mod
                     @test columnindex(getproperty(ad, oattr), :pushed) > 0
+
+                    map = vec(getproperty(md, oattrmap)[mod])
+                    mask = map .> 0
+                    @test getproperty(md, oattr)[!, :pushed][mask] == getproperty(ad, oattr)[!, :pushed][map[mask]]
                 end
-                @test columnindex(getproperty(ad1, oattr), :ad2_pushed) == 0
-                @test columnindex(getproperty(ad2, oattr), :ad2_pushed) > 0
-                @test columnindex(getproperty(ad3, oattr), :ad2_pushed) == 0
-                @test all(getproperty(ad2, oattr)[!, :ad2_pushed])
+                @test columnindex(getproperty(ad1, oattr), :ad3_pushed) == 0
+                @test columnindex(getproperty(ad2, oattr), :ad3_pushed) == 0
+                @test columnindex(getproperty(ad3, oattr), :ad3_pushed) > 0
+
+                map = vec(getproperty(md, oattrmap)["ad3"])
+                mask = map .> 0
+                @test getproperty(md, oattr)[!, "ad3:ad3_pushed"][mask] ==
+                      getproperty(ad3, oattr)[!, :ad3_pushed][map[mask]]
             end
         end
     end
