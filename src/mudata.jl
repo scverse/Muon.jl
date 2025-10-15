@@ -604,6 +604,10 @@ function _update_attr!(mdata::MuData, attr::Symbol, axis::UInt8)
             end
         end
     end
+
+    if get_option("pull_on_update")
+        _pull_attr!(mdata, attr, axis)
+    end
     return mdata
 end
 

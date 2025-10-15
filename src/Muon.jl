@@ -15,6 +15,7 @@ using FillArrays
 using DataStructures
 using OrderedCollections
 using FileIO
+using Preferences
 
 using Compat
 
@@ -37,7 +38,7 @@ export readh5mu,
     var_names_make_unique!,
     obs_names_make_unique!
 export AnnData, MuData
-@compat public write, size, getindex, setindex!, view
+@compat public write, size, getindex, setindex!, view, set_options, get_option
 import Pkg
 # this executes only during precompilation
 let
@@ -48,6 +49,7 @@ end
 MUDATAVERSION = v"0.1.0"
 ANNDATAVERSION = v"0.1.0"
 
+include("config.jl")
 include("typedefs.jl")
 include("index.jl")
 include("sparsedataset.jl")
