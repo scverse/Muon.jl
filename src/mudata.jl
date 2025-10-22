@@ -807,7 +807,10 @@ function _push_attr!(
             mask = modmap .> 0
             cdf = df[mask, :]
             select!(cdf, (col.name => col.derived_name for col ∈ cols if isnothing(col.prefix) || col.prefix == mod)...)
-            cdf = cdf[sortperm(view(modmap, mask)), :]
+
+            idx = Vector{eltype(modmap)}(undef, size(cdf, 1))
+            @views idx[modmap[mask]] .= 1:size(cdf, 1)
+            cdf = cdf[idx, :]
 
             moddf = getproperty(ad, attr)
             for (colname, col) ∈ zip(names(cdf), eachcol(cdf))
