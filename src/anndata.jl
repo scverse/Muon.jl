@@ -361,6 +361,7 @@ function Base.getindex(
         obs_names=adata.obs_names[i],
         var=isempty(adata.var) ? nothing : adata.var[j, :],
         var_names=adata.var_names[j],
+        uns=deepcopy(adata.uns),
     )
     copy_subset(adata.obsm, newad.obsm, i, j)
     copy_subset(adata.varm, newad.varm, i, j)

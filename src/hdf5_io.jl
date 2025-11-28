@@ -37,12 +37,16 @@ end
 
 read_scalar(d::HDF5.Dataset) = read(d)
 
+function write_empty(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, dtype::Type)
+    d = create_dataset(parent, name, dtype, dataspace(nothing))
+    return d
+end
+
 function write_scalar(
     parent::Union{HDF5.File, HDF5.Group},
     name::AbstractString,
     data::T,
 ) where {T <: Union{<:Number, <:AbstractString}}
-    dtype = datatype(T)
     d, dtype = create_dataset(parent, name, data)
     write_dataset(d, dtype, data)
     return d

@@ -120,6 +120,8 @@ function read_auto(f::Dataset; kwargs...)
         enctype = read_attribute(f, "encoding-type")
         if endswith(enctype, "scalar") || enctype == "string"
             return read_scalar(f), nothing
+        elseif enctype == "null"
+            return nothing, nothing
         end
     end
     return read_matrix(f; kwargs...), nothing
@@ -159,6 +161,7 @@ function read_dict_of_mixed(f::Group; kwargs...)
             <:AbstractArray{Union{Bool, Missing}},
             <:AbstractString,
             <:Number,
+            Nothing,
             Dict,
         },
     }()
@@ -314,4 +317,8 @@ write_impl(
     kwargs...,
 ) = write_impl(prt, name, parent(data), transposed=true; kwargs...)
 
-write_impl(parent::Group, name::AbstractString, ::Nothing; kwargs...) = nothing
+function write_impl(parent::Group, name::AbstractString, ::Nothing; kwargs...)
+    dset = write_empty(parent, name, Float32)
+    write_attribute(dset, "encoding-type", "null")
+    write_attribute(dset, "encoding-version", "0.1.0")
+end

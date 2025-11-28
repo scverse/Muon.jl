@@ -31,6 +31,7 @@ function make_ads(;
         var=DataFrame(nonunique_col=1:d2, common_col=["ad2_$i" for i ∈ 1:d2]),
         layers=Dict("testlayer" => rand(UInt16, n, d2)),
         varm=Dict("test" => rand(Int8, d2, 5, 2, 10)),
+        uns=Dict("test" => nothing),
     )
 
     ad3 = AnnData(
@@ -169,6 +170,8 @@ ad1, ad2, ad3 = make_ads(obs_mod_duplicated=true)
 md = (@test_logs (:warn, warn_msg) (:warn, warn_msg6) MuData(mod=Dict("ad1" => ad1, "ad2" => ad2)))
 md.var[!, :mutestcol] = rand(size(md, 2))
 md.obsm["mdtest"] = rand(size(md, 1), 5, 3)
+ad2.uns["test"] = nothing
+md.uns["mdtest"] = nothing
 
 @testset "slicing mudata" begin
     with_logger(NullLogger()) do
@@ -218,6 +221,8 @@ end
         @test cmd["ad2"].var == read_md["ad2"].var == read_md_backed["ad2"].var
         @test cmd["ad2"].varm == read_md["ad2"].varm == read_md_backed["ad2"].varm
         @test cmd["ad2"].layers == read_md["ad2"].layers == read_md_backed["ad2"].layers
+        @test isnothing(read_md.uns["mdtest"])
+        @test isnothing(read_md["ad2"].uns["test"])
 
         cmd["ad3"] = ad3
         tempfile2 = tempname()
@@ -439,7 +444,7 @@ end
             if unique && axis == 0x2
                 md = (@test_nowarn MuData(mod=Dict("ad1" => ad1, "ad2" => ad2, "ad3" => ad3), axis=axis))
             else
-                md = with_logger(NullLogger()) do # warning depends on the RNG, and differs between Julia versions
+                md = with_logger(NullLogger()) do   # warning depends on the RNG, and differs between Julia versions
                     MuData(mod=Dict("ad1" => ad1, "ad2" => ad2, "ad3" => ad3), axis=axis)
                 end
             end

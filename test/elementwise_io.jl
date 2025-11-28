@@ -50,6 +50,7 @@ zarrfile = zgroup(tempname())
             "h" => PooledArray([1, 1, 2, 1]),
             "i" => [1, 2, missing, 3],
             "k" => [true, false, missing, true],
+            "l" => nothing,
         )
 
         Muon.write_attr(file, "roundtrip", outdata)

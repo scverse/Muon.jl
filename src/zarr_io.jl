@@ -44,6 +44,11 @@ function write_scalar(parent::ZGroup, name::AbstractString, data::T) where {T <:
     return d
 end
 
+function write_empty(parent::ZGroup, name::AbstractString, dtype::Type)
+    d = zcreate(dtype, parent, name)
+    return d
+end
+
 function write_array_encoding(dataset::ZArray{<:Number})
     write_attribute(dataset, "encoding-type", "array")
     write_attribute(dataset, "encoding-version", "0.2.0")

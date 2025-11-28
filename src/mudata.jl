@@ -375,6 +375,7 @@ function Base.getindex(
         obs_names=mdata.obs_names[i],
         var=isempty(mdata.var) ? nothing : mdata.var[j, :],
         var_names=mdata.var_names[j],
+        uns=deepcopy(mdata.uns),
         do_update=false,
     )
     copy_subset(mdata.obsm, newmu.obsm, i, j)
@@ -1116,6 +1117,7 @@ mutable struct MuDataView{Ti, Tj} <: AbstractMuData
             adjustmap!(vec(mv.obsmap[mod]), I)
             adjustmap!(vec(mv.varmap[mod]), J)
         end
+        mv.uns = parent.uns
         return mv
     end
 end
