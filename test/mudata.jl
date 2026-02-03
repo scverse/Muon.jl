@@ -1,6 +1,7 @@
 using Random
 using Logging
 using DataFrames
+using OrderedCollections
 
 Random.seed!(42)
 
@@ -242,7 +243,7 @@ end
 end
 
 function make_mdata(ads...; axis)
-    modalities = Dict("ad$i" => ad for (i, ad) ∈ enumerate(ads))
+    modalities = OrderedDict("ad$i" => ad for (i, ad) ∈ enumerate(ads))
     mdata = MuData(mod=modalities, axis=axis)
 
     mdata.obs[!, "batch"] = rand(("a", "b", "c"), size(mdata, 1))
@@ -369,7 +370,7 @@ end
                     for (modname, ad) ∈ zip(modnames, (ad1, ad2, ad3))
                         getproperty(ad, onamesattr)[2:end] .= ("$(modname)_$(oattr)_$(i)" for i ∈ 2:size(ad, oaxis))
                     end
-                    md = MuData(mod=Dict(modname => ad for (modname, ad) ∈ zip(modnames, (ad1, ad2, ad3))), axis=axis)
+                    md = MuData(mod=OrderedDict(modname => ad for (modname, ad) ∈ zip(modnames, (ad1, ad2, ad3))), axis=axis)
 
                     # names along non-axis are concatenated
                     @test size(md, oaxis) == sum(size(ad, oaxis) for ad ∈ values(md.mod))
