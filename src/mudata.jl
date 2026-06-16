@@ -775,7 +775,7 @@ function _push_attr!(
     for colname ∈ names(df)
         splitname = split(colname, ":", limit=2)
         if (length(splitname) == 1 || !haskey(mdata.mod, splitname[1])) &&
-           (isnothing(columns) && common || splitname ∈ columns)
+           (isnothing(columns) && common || colname ∈ columns)
             push!(cols, (name=colname, derived_name=colname, prefix=nothing))
         elseif (isnothing(mods) || splitname[1] ∈ mods) && (isnothing(columns) && prefixed || splitname[2] ∈ columns)
             push!(cols, (name=colname, derived_name=splitname[2], prefix=splitname[1]))
