@@ -31,9 +31,13 @@ function Base.iterate(group::ZGroup, i=nothing)
     return isnothing(next) ? next : ((next[1] => group[next[1]]), (iter, next[2]))
 end
 
-function write_attribute(obj::Union{ZArray, ZGroup}, attrname::AbstractString, data)
+function write_attribute(obj::ZGroup, attrname::AbstractString, data)
     obj.attrs[attrname] = data
-    Zarr.writeattrs(obj.storage, obj.path, obj.attrs)
+    Zarr.writeattrs(obj.zarr_format, obj.storage, obj.path, obj.attrs)
+end
+function write_attribute(obj::ZArray, attrname::AbstractString, data)
+    obj.attrs[attrname] = data
+    Zarr.writeattrs(Zarr.ZarrFormat(obj.storage, obj.path), obj.storage, obj.path, obj.attrs)
 end
 
 read_scalar(d::ZArray) = d[]
