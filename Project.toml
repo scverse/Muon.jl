@@ -1,7 +1,7 @@
 name = "Muon"
 uuid = "446846d7-b4ce-489d-bf74-72da18fe3629"
-authors = ["Danila Bredikhin <danila.bredikhin@embl.de>", "Ilia Kats <i.kats@dkfz-heidelberg.de>"]
 version = "0.2.1"
+authors = ["Danila Bredikhin <danila.bredikhin@embl.de>", "Ilia Kats <i.kats@dkfz-heidelberg.de>"]
 
 [deps]
 CategoricalArrays = "324d7699-5711-5eae-9e2f-1d82baa6b597"
@@ -33,7 +33,7 @@ FileIO = "1.6"
 FillArrays = "1.13.0"
 HDF5 = "0.16 - 0.99, 1"
 Logging = "1.6.7"
-OrderedCollections = "1.6"
+OrderedCollections = "1.6, 2"
 PooledArrays = "1"
 Preferences = "1.5.0"
 StructArrays = "0.6.4, 0.7"
