@@ -277,19 +277,25 @@ function writeh5mu(filename::AbstractString, mudata::AbstractMuData; compress::U
 end
 
 """
-    writezarrmu(filename::AbstractString, mudata::AbstractMuData; compress::UInt8=0x9)
+    writezarrmu(filename::AbstractString, mudata::AbstractMuData; compress::UInt8=0x9, zarr_format::Union{<:Integer, Zarr.ZarrFormat}=2)
 
 Write a [`MuData`](@ref) object to disk using the Zarr format.
 
 `compress` indicates the level of compression to apply, from 0 (no compression) to 9 (highest compression).
+`zarr_format` indicates the Zarr format version to use. Only supports 2 and 3. Ignored when updating backed MuData objects.
 
 See also [`writeh5mu`](@ref), [`readh5mu`](@ref), [`readzarrmu`](@ref).
 """
-function writezarrmu(filename::AbstractString, mudata::AbstractMuData; compress::UInt8=0x9)
+function writezarrmu(
+    filename::AbstractString,
+    mudata::AbstractMuData;
+    compress::UInt8=0x9,
+    zarr_format::Union{<:Integer, Zarr.ZarrFormat}=2,
+)
     filename = abspath(filename)
     if isnothing(file(mudata)) || filename != zarr_filename(file(mudata))
         rm(filename, force=true, recursive=true)
-        zfile = zgroup(filename)
+        zfile = zgroup(Zarr.storefromstring(filename, true)..., zarr_format)
         write(zfile, mudata, compress=compress)
     else
         write(mudata, compress=compress)

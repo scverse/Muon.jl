@@ -247,7 +247,7 @@ function writeh5ad(filename::AbstractString, adata::AbstractAnnData; compress::U
 end
 
 """
-    writezarrad(filename::AbstractString, adata::AbstractAnnData; compress::UInt8=0x9)
+    writezarrad(filename::AbstractString, adata::AbstractAnnData; compress::UInt8=0x9, zarr_format::Union{<:Integer, Zarr.ZarrFormat}=2)
 
 Write an [`AnnData`](@ref) object to disk using the Zarr format.
 
@@ -255,11 +255,16 @@ Write an [`AnnData`](@ref) object to disk using the Zarr format.
 
 See also [`writeh5ad`](@ref), [`readh5ad`](@ref), [`readzarrad`](@ref).
 """
-function writezarrad(filename::AbstractString, adata::AbstractAnnData; compress::UInt8=0x9)
+function writezarrad(
+    filename::AbstractString,
+    adata::AbstractAnnData;
+    compress::UInt8=0x9,
+    zarr_format::Union{<:Integer, Zarr.ZarrFormat}=2,
+)
     filename = abspath(filename)
     if isnothing(file(adata)) || filename != zarr_filename(file(adata))
         rm(filename, force=true, recursive=true)
-        zfile = zgroup(filename)
+        zfile = zgroup(Zarr.storefromstring(filename, true)..., zarr_format)
         write(zfile, adata, compress=compress)
     else
         write(adata, compress=compress)
