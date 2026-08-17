@@ -1,6 +1,6 @@
 name = "Muon"
 uuid = "446846d7-b4ce-489d-bf74-72da18fe3629"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["Danila Bredikhin <danila.bredikhin@embl.de>", "Ilia Kats <i.kats@dkfz-heidelberg.de>"]
 
 [deps]
