@@ -304,7 +304,7 @@ function writezarrmu(
 end
 
 function Base.write(parent::Group, mudata::AbstractMuData; compress::UInt8=0x9)
-    write_attribute(parent, "encoding-type", "MuData")
+    write_attribute(parent, "encoding-type", "mudata")
     write_attribute(parent, "encoding-version", string(MUDATAVERSION))
     write_attribute(parent, "encoder", NAME)
     write_attribute(parent, "encoder-version", string(VERSION))
