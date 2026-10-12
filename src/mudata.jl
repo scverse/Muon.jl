@@ -73,7 +73,7 @@ mutable struct MuData <: AbstractMuData
         if checkversion
             if !has_attribute(file, "encoding-type")
                 @warn "This file was not created by muon, we can't guarantee that everything will work correctly"
-            elseif read_attribute(file, "encoding-type") != "MuData"
+            elseif lowercase(read_attribute(file, "encoding-type")) != "mudata"
                 error("This file does not appear to hold a MuData object")
             end
         end
