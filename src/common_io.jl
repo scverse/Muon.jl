@@ -3,7 +3,11 @@ function read_dataframe(tablegroup::Group; separate_index=true, kwargs...)
 
     if separate_index && has_attribute(tablegroup, "_index")
         indexdsetname = read_attribute(tablegroup, "_index")
-        rownames = read(tablegroup[indexdsetname])
+        rownames = read_auto(tablegroup[indexdsetname])[1]
+
+        if Missing <: eltype(rownames)
+            @warn "Dataframe index for data frame $(HDF5.name(tablegroup)) contains missing values. This is untested and may lead to surprising behavior."
+        end
     else
         rownames = nothing
     end
@@ -38,7 +42,7 @@ function read_matrix(f::Dataset; kwargs...)
     if ndims(f) > 1
         mat = PermutedDimsArray(mat, ndims(mat):-1:1) # transpose for h5py compatibility
     end
-    if has_attribute(f, "categories")
+    if has_attribute(f, "categories") # legacy
         categories = f[read_attribute(f, "categories")]
         ordered = has_attribute(categories, "ordered") && read_attribute(categories, "ordered") == true
         cats = read(categories)
@@ -87,11 +91,17 @@ function read_matrix(f::Group; kwargs...)
         codes = read(f, "codes") .+ true
 
         T = any(iszero, codes) ? Union{Missing, eltype(categories)} : eltype(categories)
-        mat = if ordered
-            CategoricalVector{T}(undef, length(codes); levels=categories, ordered=ordered)
+        if ordered
+            mat = CategoricalArray{T}(undef, size(codes)...; levels=categories, ordered=ordered)
             copy!(mat.refs, codes)
         else
-            PooledArray(PooledArrays.RefArray(codes), Dict{T, eltype(codes)}(v => i for (i, v) ∈ enumerate(categories)))
+            mat = PooledArray(
+                PooledArrays.RefArray(codes),
+                Dict{T, eltype(codes)}(v => i for (i, v) ∈ enumerate(categories)),
+            )
+        end
+        if ndims(mat) > 1
+            mat = PermutedDimsArray(mat, ndims(mat):-1:1) # transpose for h5py compatibility
         end
         return mat
     else
@@ -99,7 +109,7 @@ function read_matrix(f::Group; kwargs...)
     end
 end
 
-function read_nullable_integer_array(f::Group, kwargs...)
+function read_nullable_array(f::Group, kwargs...)
     mask = read_matrix(f["mask"])
     values = read(f["values"])
     return [m ? missing : v for (m, v) ∈ zip(mask, values)]
@@ -135,8 +145,8 @@ function read_auto(f::Group; kwargs...)
             return read_matrix(f; kwargs), nothing
         elseif enctype == "dict"
             return read_dict_of_mixed(f; kwargs...), nothing
-        elseif enctype == "nullable-integer"
-            return read_nullable_integer_array(f; kwargs...), nothing
+        elseif enctype ∈ ("nullable-integer", "nullable-string-array")
+            return read_nullable_array(f; kwargs...), nothing
         elseif enctype == "nullable-boolean"
             return read_nullable_boolean_array(f; kwargs...), nothing
         else
@@ -154,10 +164,10 @@ function read_dict_of_mixed(f::Group; kwargs...)
             DataFrame,
             StructArray,
             <:AbstractArray{<:Number},
-            <:AbstractArray{<:AbstractString},
             <:CategoricalArray{<:Number},
             <:CategoricalArray{<:AbstractString},
             <:AbstractArray{<:Union{Integer, Missing}},
+            <:AbstractArray{<:Union{<:AbstractString, Missing}},
             <:AbstractArray{Union{Bool, Missing}},
             <:AbstractString,
             <:Number,
@@ -256,7 +266,7 @@ function write_impl(parent::Group, name::AbstractString, data::AbstractArray{Uni
     write_attribute(g, "encoding-version", "0.1.0")
 
     write_impl(g, "mask", ismissing.(data))
-    write_impl(g, "values", Bool[ismissing(v) ? 0 : v for v ∈ data])
+    write_impl(g, "values", Bool[ismissing(v) ? zero(Bool) : v for v ∈ data])
 end
 
 function write_impl(
@@ -270,7 +280,21 @@ function write_impl(
     write_attribute(g, "encoding-version", "0.1.0")
 
     write_impl(g, "mask", ismissing.(data))
-    write_impl(g, "values", T[ismissing(v) ? 0 : v for v ∈ data])
+    write_impl(g, "values", T[ismissing(v) ? zero(T) : v for v ∈ data])
+end
+
+function write_impl(
+    parent::Group,
+    name::AbstractString,
+    data::AbstractArray{Union{T, Missing}};
+    kwargs...,
+) where {T <: AbstractString}
+    g = create_group(parent, name)
+    write_attribute(g, "encoding-type", "nullable-string-array")
+    write_attribute(g, "encoding-version", "0.1.0")
+
+    write_impl(g, "mask", ismissing.(data))
+    write_impl(g, "values", T[ismissing(v) ? one(T) : v for v ∈ data])
 end
 
 function write_impl(
