@@ -37,7 +37,7 @@ function read_matrix(f::Dataset; kwargs...)
     end
 
     if ndims(f) == 0
-        return mat[]
+        return mat
     end
     if ndims(f) > 1
         mat = PermutedDimsArray(mat, ndims(mat):-1:1) # transpose for h5py compatibility

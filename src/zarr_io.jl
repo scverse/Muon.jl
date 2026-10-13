@@ -1,7 +1,13 @@
 read_attribute(obj::Union{ZArray, ZGroup}, attrname::AbstractString) = obj.attrs[attrname]
 has_attribute(obj::Union{ZArray, ZGroup}, attrname::AbstractString) = haskey(obj.attrs, attrname)
-Base.read(arr::ZArray) = collect(arr)
-Base.read(grp::ZGroup, name::AbstractString) = collect(grp[name])
+function Base.read(arr::ZArray)
+    if size(arr) == ()
+        return arr[]
+    else
+        return collect(arr)
+    end
+end
+Base.read(grp::ZGroup, name::AbstractString) = read(grp[name])
 
 create_group(parent::ZGroup, name::AbstractString) = zgroup(parent, name)
 
