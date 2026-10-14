@@ -1,7 +1,7 @@
 name = "Muon"
 uuid = "446846d7-b4ce-489d-bf74-72da18fe3629"
-version = "0.3.1"
 authors = ["Danila Bredikhin <danila.bredikhin@embl.de>", "Ilia Kats <i.kats@dkfz-heidelberg.de>"]
+version = "0.3.1"
 
 [deps]
 CategoricalArrays = "324d7699-5711-5eae-9e2f-1d82baa6b597"
@@ -22,6 +22,7 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 StructArrays = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
 Zarr = "0a941bbe-ad1d-11e8-39d9-ab76183a1d99"
+ZarrCore = "77f5b75c-4c08-499f-ba13-550b0a0af171"
 
 [compat]
 CategoricalArrays = "0.9, 0.10, 1"
@@ -38,11 +39,12 @@ OrderedCollections = "1.6, 2.0"
 Pkg = "< 0.0.1, 1.5"
 PooledArrays = "1"
 Preferences = "1.5.0"
-SparseArrays = "< 0.0.1, 1.5"
 Random = "< 0.0.1, 1.5"
+SparseArrays = "< 0.0.1, 1.5"
 StructArrays = "0.6.4, 0.7"
-Zarr = "0.10"
-julia = "1.5"
+Zarr = "0.11"
+ZarrCore = "0.11"
+julia = "1.10"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

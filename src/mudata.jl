@@ -277,7 +277,7 @@ function writeh5mu(filename::AbstractString, mudata::AbstractMuData; compress::U
 end
 
 """
-    writezarrmu(filename::AbstractString, mudata::AbstractMuData; compress::UInt8=0x9, zarr_format::Union{<:Integer, Zarr.ZarrFormat}=2)
+    writezarrmu(filename::AbstractString, mudata::AbstractMuData; compress::UInt8=0x9, zarr_format::Union{<:Integer, ZarrCore.ZarrFormat}=2)
 
 Write a [`MuData`](@ref) object to disk using the Zarr format.
 
@@ -290,7 +290,7 @@ function writezarrmu(
     filename::AbstractString,
     mudata::AbstractMuData;
     compress::UInt8=0x9,
-    zarr_format::Union{<:Integer, Zarr.ZarrFormat}=2,
+    zarr_format::Union{<:Integer, ZarrCore.ZarrFormat}=2,
 )
     filename = abspath(filename)
     if isnothing(file(mudata)) || filename != zarr_filename(file(mudata))
@@ -1163,7 +1163,7 @@ If there are `obs_names` which are the same for multiple modalities, the modalit
 
 See also [`var_names_make_unique!(::MuData)`](@ref), [`obs_names_make_unique!(::AnnData)`](@ref), [`var_names_make_unique!(::AnnData)`](@ref)
 """
-obs_names_make_unique!(mdata::MuData, join='-') = attr_make_unique(mdata, :obs, 0x1, join)
+obs_names_make_unique!(mdata::MuData, join=('-')) = attr_make_unique(mdata, :obs, 0x1, join)
 
 """
     var_names_make_unique!(mdata::MuData, join='-')
@@ -1174,8 +1174,8 @@ If there are `var_names` which are the same for multiple modalities, the modalit
 
 See also [`obs_names_make_unique!(::MuData)`](@ref), [`obs_names_make_unique!(::AnnData)`](@ref), [`var_names_make_unique!(::AnnData)`](@ref)
 """
-var_names_make_unique!(mdata::MuData, join='-') = attr_make_unique(mdata, :obs, 0x2, join)
-function attr_make_unique!(mdata::MuData, attr::Symbol, axis::UInt8, join='-')
+var_names_make_unique!(mdata::MuData, join=('-')) = attr_make_unique(mdata, :obs, 0x2, join)
+function attr_make_unique!(mdata::MuData, attr::Symbol, axis::UInt8, join=('-'))
     namesattr = Symbol(string(attr) * "_names")
 
     if !allunique(getproperty(mdata, namesattr))

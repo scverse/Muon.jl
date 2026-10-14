@@ -39,11 +39,11 @@ end
 
 function write_attribute(obj::ZGroup, attrname::AbstractString, data)
     obj.attrs[attrname] = data
-    Zarr.writeattrs(obj.zarr_format, obj.storage, obj.path, obj.attrs)
+    ZarrCore.writeattrs(obj.zarr_format, obj.storage, obj.path, obj.attrs)
 end
 function write_attribute(obj::ZArray, attrname::AbstractString, data)
     obj.attrs[attrname] = data
-    Zarr.writeattrs(Zarr.ZarrFormat(obj.storage, obj.path), obj.storage, obj.path, obj.attrs)
+    ZarrCore.writeattrs(ZarrCore.ZarrFormat(obj.storage, obj.path), obj.storage, obj.path, obj.attrs)
 end
 
 read_scalar(d::ZArray) = d[]

@@ -7,6 +7,7 @@ import LinearAlgebra: Adjoint
 using EllipsisNotation
 using HDF5
 using Zarr
+import ZarrCore
 using DataFrames
 using CategoricalArrays
 using StructArrays

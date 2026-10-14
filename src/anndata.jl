@@ -247,7 +247,7 @@ function writeh5ad(filename::AbstractString, adata::AbstractAnnData; compress::U
 end
 
 """
-    writezarrad(filename::AbstractString, adata::AbstractAnnData; compress::UInt8=0x9, zarr_format::Union{<:Integer, Zarr.ZarrFormat}=2)
+    writezarrad(filename::AbstractString, adata::AbstractAnnData; compress::UInt8=0x9, zarr_format::Union{<:Integer, ZarrCore.ZarrFormat}=2)
 
 Write an [`AnnData`](@ref) object to disk using the Zarr format.
 
@@ -259,7 +259,7 @@ function writezarrad(
     filename::AbstractString,
     adata::AbstractAnnData;
     compress::UInt8=0x9,
-    zarr_format::Union{<:Integer, Zarr.ZarrFormat}=2,
+    zarr_format::Union{<:Integer, ZarrCore.ZarrFormat}=2,
 )
     filename = abspath(filename)
     if isnothing(file(adata)) || filename != zarr_filename(file(adata))
@@ -285,18 +285,10 @@ end
 
 Write the `adata` to an already open HDF5 or Zarr file into the group `parent` as a subgroup with name `name`.
 """
-Base.write(
-    parent::Union{HDF5.File, HDF5.Group},
-    name::AbstractString,
-    adata::AbstractAnnData;
-    compress::UInt8=0x9,
-)=_write(parent, name, adata, compress=compress)
-Base.write(
-    parent::ZGroup,
-    name::AbstractString,
-    adata::AbstractAnnData;
-    compress::UInt8=0x9,
-)=_write(parent, name, adata, compress=compress)
+Base.write(parent::Union{HDF5.File, HDF5.Group}, name::AbstractString, adata::AbstractAnnData; compress::UInt8=0x9) =
+    _write(parent, name, adata, compress=compress)
+Base.write(parent::ZGroup, name::AbstractString, adata::AbstractAnnData; compress::UInt8=0x9) =
+    _write(parent, name, adata, compress=compress)
 
 function Base.write(parent::Group, adata::AbstractAnnData; compress::UInt8=0x9)
     write_attribute(parent, "encoding-type", "anndata")
@@ -458,7 +450,7 @@ Make `ad.var_names` unique by appending `join` and sequential numbers
 
 See also [`obs_names_make_unique!(::AnnData)`](@ref).
 """
-function var_names_make_unique!(ad::AnnData, join='-')
+function var_names_make_unique!(ad::AnnData, join=('-'))
     attr_make_unique!(ad, :var_names, join)
 end
 
@@ -470,7 +462,7 @@ Make `ad.obs_names` unique by appending `join` and sequential numbers
 
 See also [`var_names_make_unique!(::AnnData)`](@ref).
 """
-function obs_names_make_unique!(ad::AnnData, join='-')
+function obs_names_make_unique!(ad::AnnData, join=('-'))
     attr_make_unique!(ad, :obs_names, join)
 end
 
