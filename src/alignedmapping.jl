@@ -174,13 +174,15 @@ function Base.setindex!(d::BackedAlignedMapping{T}, v::AbstractArray, k) where {
 end
 
 function copy_subset(src::AbstractAlignedMapping{T}, dst::AbstractAlignedMapping, I, J) where {T <: Tuple}
-    idx = (if refdim == 1
-        I
-    elseif refdim == 2
-        J
-    else
-        (:)
-    end for (vdim, refdim) ∈ T.parameters)
+    idx = (
+        if refdim == 1
+            I
+        elseif refdim == 2
+            J
+        else
+            (:)
+        end for (vdim, refdim) ∈ T.parameters
+    )
     for (k, v) ∈ src
         dst[k] = v[idx..., ..]
     end

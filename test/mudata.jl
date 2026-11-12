@@ -370,7 +370,10 @@ end
                     for (modname, ad) ∈ zip(modnames, (ad1, ad2, ad3))
                         getproperty(ad, onamesattr)[2:end] .= ("$(modname)_$(oattr)_$(i)" for i ∈ 2:size(ad, oaxis))
                     end
-                    md = MuData(mod=OrderedDict(modname => ad for (modname, ad) ∈ zip(modnames, (ad1, ad2, ad3))), axis=axis)
+                    md = MuData(
+                        mod=OrderedDict(modname => ad for (modname, ad) ∈ zip(modnames, (ad1, ad2, ad3))),
+                        axis=axis,
+                    )
 
                     # names along non-axis are concatenated
                     @test size(md, oaxis) == sum(size(ad, oaxis) for ad ∈ values(md.mod))
