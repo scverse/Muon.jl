@@ -25,6 +25,9 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           enable-cache: true
+      - uses: julia-actions/setup-julia@da908477b5db94c10ffce8cfea9f2b3b9d5db687 # v3.0.3
+      - name: Install JuliaFormatter (for the `julia-formatter` hook)
+        run: julia -e 'using Pkg; Pkg.add(name="JuliaFormatter", version="2.14.10")'
       - name: Run pre-commit hooks
         run: uvx prek run --all-files --show-diff-on-failure --color=always
       - uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
